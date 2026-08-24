@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.shinydiscoballsdev.kifossk"
-    compileSdk = 34
+    compileSdk = 35
 
     dependenciesInfo {
         includeInApk = false
@@ -17,9 +17,10 @@ android {
     defaultConfig {
         applicationId = "com.shinydiscoballsdev.kifossk"
         minSdk = 24
-        targetSdk = 34
-        versionCode = 4
-        versionName = "1.0.3"
+        //noinspection EditedTargetSdkVersion
+        targetSdk = 35
+        versionCode = 5
+        versionName = "1.1.0"
     }
 
     applicationVariants.all {

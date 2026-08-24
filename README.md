@@ -10,13 +10,15 @@
 
 Built with zero Google Play Services dependencies, it runs natively on AOSP, GrapheneOS, and standard Android devices. Perfect for turning old phones into always-on informational displays.
 
-## 🚀 Latest Release: v1.0.3 (August 2026)
+## 🚀 Latest Release: v1.1.0 (August 2026)
 
-**What's New:**
-- Full gesture conflict fix — WebView long-press context menu completely disabled
-- CSS injection prevents text selection highlighting in kiosk mode
-- Optional auto-refresh with configurable interval (10s–15min presets)
-- Auto-refresh pauses on background to preserve battery
+What's New:
+- Kotlin 2.0 + SDK 35 upgrade
+- Long-press anywhere to access settings (no more corner hunting)
+- Fixed launcher status detection on fresh installs
+- Graceful network error handling (no more Chromium error pages)
+
+Full Changelog → | Download APK | F-Droid | ☕ Ko-fi
 
 [Full Changelog →](CHANGELOG.md) | [Download APK](https://github.com/ShinyDiscoBallsDev/kiFOSSk/releases) | [F-Droid](https://f-droid.org/packages/com.shinydiscoballsdev.kifossk/) | [☕ Ko-fi](https://ko-fi.com/shinydiscoballsdev)
 
@@ -84,7 +86,7 @@ APK located at: app/build/outputs/apk/release/kiFOSSk-X.Y.Z-release.apk
 5. Set as Home App: Tap "Set as Home Launcher" and select "Always".
 6. Reboot: The app should launch automatically on boot.
 
-**Note**: Settings access is restricted to the bottom-right corner zone with a 10-second cooldown between accesses to prevent accidental triggers during device movement.
+**Note**: Note: Long-press anywhere on the screen to access settings. A 10-second cooldown between accesses prevents accidental triggers.
 
 ### Auto-Refresh Setup
 

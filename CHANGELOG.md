@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-08
+
+### Changed
+- Upgraded AGP from 8.2.1 to 8.7.2
+- Upgraded Kotlin from 1.9.21 to 2.0.21 (K2 compiler)
+- Upgraded compileSdk and targetSdk from 34 to 35 (Android 15)
+
+### Fixed
+- Long-press gesture broken by Kotlin 2.0 K2 compiler no longer implicitly returning `true` from `onDown()` — now explicitly overridden
+- Launcher status falsely showing "Active" on fresh installs — replaced `resolveActivity()` with `RoleManager.isRoleHeld(RoleManager.ROLE_HOME)` on Android 10+
+- Network errors mid-session now show the waiting page instead of Chromium's raw error page (`onReceivedError` hooked into existing `NetworkRetryHelper`)
+
+### Removed
+- Gesture zone restriction (bottom-right corner) — long-press now works anywhere on screen
+- `GESTURE_ZONE_SIZE_PX` constant (dead code)
+
 ## [1.0.3] - 2026-08
 
 ### Fixed
