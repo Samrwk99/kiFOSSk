@@ -20,8 +20,6 @@ What's New:
 - Fixed launcher status detection on fresh installs
 - Graceful network error handling (no more Chromium error pages)
 
-Full Changelog → | Download APK | F-Droid | ☕ Ko-fi
-
 [Full Changelog →](CHANGELOG.md) | [Download APK](https://github.com/ShinyDiscoBallsDev/kiFOSSk/releases) | [F-Droid](https://f-droid.org/packages/com.shinydiscoballsdev.kifossk/) | [☕ Ko-fi](https://ko-fi.com/shinydiscoballsdev)
 
 ## Features
