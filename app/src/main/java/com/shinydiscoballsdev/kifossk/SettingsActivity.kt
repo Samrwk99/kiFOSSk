@@ -3,8 +3,6 @@ package com.shinydiscoballsdev.kifossk
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -14,9 +12,9 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import android.net.Uri
 import android.provider.Settings
-import android.content.pm.PackageManager
 import androidx.appcompat.widget.SwitchCompat
-import com.shinydiscoballsdev.kifossk.KioskPrefs
+import android.app.role.RoleManager
+import android.os.Build
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -88,7 +86,7 @@ class SettingsActivity : AppCompatActivity() {
         spinnerRefreshInterval.setSelection(if (intervalIndex >= 0) intervalIndex else 1)
         updateRefreshIntervalSpinnerState()
 
-        switchAutoRefresh.setOnCheckedChangeListener { _, isChecked ->
+        switchAutoRefresh.setOnCheckedChangeListener { _, _ ->
             updateRefreshIntervalSpinnerState()
         }
 
@@ -143,12 +141,21 @@ class SettingsActivity : AppCompatActivity() {
     /**
      * Check if kiFOSSk is the default home launcher and update UI
      */
-    private fun updateLauncherStatus() {
-        val intent = Intent(Intent.ACTION_MAIN)
-        intent.addCategory(Intent.CATEGORY_HOME)
 
-        val resolver = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
-        val isDefault = resolver?.activityInfo?.packageName == packageName
+    private fun isDefaultLauncher(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = getSystemService(RoleManager::class.java)
+            return roleManager?.isRoleHeld(RoleManager.ROLE_HOME) ?: false
+        }
+
+        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+        }
+        val resInfo = packageManager.resolveActivity(homeIntent, 0)
+        return resInfo?.activityInfo?.packageName == packageName
+    }
+    private fun updateLauncherStatus() {
+        val isDefault = isDefaultLauncher()
 
         if (isDefault) {
             textLauncherStatus.text = "✅ Launcher: Active (Boots on startup)"
