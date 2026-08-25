@@ -15,8 +15,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
 
-import com.shinydiscoballsdev.kifossk.KioskPrefs
-
 @SuppressLint("SetJavaScriptEnabled")
 class MainActivity : AppCompatActivity() {
 
@@ -28,7 +26,7 @@ class MainActivity : AppCompatActivity() {
     // Gesture hardening fields
     private var lastSettingsOpenTime = 0L
     private val SETTINGS_COOLDOWN_MS = 10_000L  // 10 seconds
-    private val GESTURE_ZONE_SIZE_PX = 80f     // ~80px corner zone
+    private var currentUrl = ""  // Track URL for retry
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,6 +61,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupWebView() {
 
         val url = KioskPrefs.getUrl(this)
+        currentUrl = url
         val orientation = KioskPrefs.getOrientation(this)
 
         when (orientation) {
@@ -95,27 +94,39 @@ class MainActivity : AppCompatActivity() {
                 setupAutoRefresh(url)
             }
         }
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView, url: String) {
+                view.evaluateJavascript(
+                    "document.documentElement.style.webkitUserSelect = 'none';" +
+                            "document.documentElement.style.userSelect = 'none';",
+                    null
+                )
+                setupAutoRefresh(url)
+            }
+
+            override fun onReceivedError(view: WebView?, request: android.webkit.WebResourceRequest?, error: android.webkit.WebResourceError?) {
+                super.onReceivedError(view, request, error)
+                if (request?.isForMainFrame == true) {
+                    currentUrl = KioskPrefs.getUrl(this@MainActivity)
+                    loadWaitingPage(currentUrl)
+                }
+            }
+        }
         setContentView(webView)
 
-        // Gesture detector - pass this directly
         gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+
+            override fun onDown(e: MotionEvent): Boolean {
+                return true  // Required: signals GestureDetector to track this gesture sequence
+            }
+
             override fun onLongPress(e: MotionEvent) {
                 val now = System.currentTimeMillis()
 
                 // Debounce: minimum 10 seconds between setting accesses
                 if (now - lastSettingsOpenTime < SETTINGS_COOLDOWN_MS) return
-
-                // Restrict to bottom-right corner zone (~80px area)
-                val displayMetrics = resources.displayMetrics
-                val screenWidth = displayMetrics.widthPixels.toFloat()
-                val screenHeight = displayMetrics.heightPixels.toFloat()
-
-                if (e.rawX > screenWidth - GESTURE_ZONE_SIZE_PX &&
-                    e.rawY > screenHeight - GESTURE_ZONE_SIZE_PX) {
-
-                    lastSettingsOpenTime = now
+                lastSettingsOpenTime = now
                     startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
-                }
             }
         })
 
