@@ -225,6 +225,16 @@ If boot autostart fails after initial setup:
 |-----------------------------------------------------------------------------|----------|-----------------------|
 | Lock screen may appear after Android system updates (not on normal reboots) | Low      | Unlock and reopen app |
 
+## 🪩 Planned Features
+
+Things being explored for future versions:
+
+- Multi-dashboard cycling with configurable intervals
+- Enhanced menu with About page and direct issue reporting
+- Quad-grid split-screen view for tablets (far future concept)
+
+No timelines, I'm just a solo dev cooking in her free time. ⭐ the repo if you want to follow along.
+
 ## Contributing
 
 Contributions are welcome! Whether it's bug fixes, new features, or documentation improvements:
