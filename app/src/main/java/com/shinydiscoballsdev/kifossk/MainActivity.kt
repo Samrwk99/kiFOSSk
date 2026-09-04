@@ -14,6 +14,7 @@ import android.view.WindowManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.OnBackPressedCallback
 
 @SuppressLint("SetJavaScriptEnabled")
 class MainActivity : AppCompatActivity() {
@@ -45,6 +46,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // Block back navigation — kiosk mode
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                // Do nothing — kiosk mode
+            }
+        })
 
         val isFirstRun = KioskPrefs.isFirstRun(this)
 
@@ -209,11 +217,6 @@ class MainActivity : AppCompatActivity() {
         if (hasFocus) {
             hideSystemUI()
         }
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        // Do nothing
     }
 
     override fun onDestroy() {

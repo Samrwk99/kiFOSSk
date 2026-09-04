@@ -19,6 +19,8 @@ Thumbs.db
 app/src/test/
 app/src/androidTest/
 *.test.local.properties
+avd-tests/
+*.diff
 
 # Experimental / dead code
 **/DeviceAdminReceiver.kt
