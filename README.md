@@ -1,261 +1,124 @@
 # kiFOSSk — Lightweight FOSS Kiosk Browser
 
-🌐 **Project Website:** https://kifossk.shinydiscoballs.dev
+🌐 **https://kifossk.shinydiscoballs.dev**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Android API](https://img.shields.io/badge/API-26%2B-brightgreen.svg)](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/master/core/res/res/values/config.xml)
+[![Android API](https://img.shields.io/badge/API-24%2B-brightgreen.svg)](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/master/core/res/res/values/config.xml)
 [![F-Droid](https://img.shields.io/f-droid/v/com.shinydiscoballsdev.kifossk)](https://f-droid.org/packages/com.shinydiscoballsdev.kifossk/)
 [![GitHub Stars](https://img.shields.io/github/stars/ShinyDiscoBallsDev/kiFOSSk)](https://github.com/ShinyDiscoBallsDev/kiFOSSk)
+[![Obtanium](https://img.shields.io/badge/Obtainium-Get%20App-blue)](https://obtainium.imranr.dev/)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/shinydiscoballsdev)
 
-**kiFOSSk** is a minimal, privacy-focused Android kiosk browser designed for displaying remote dashboards (e.g., ADS-B flight trackers, Home Assistant, Grafana) on dedicated hardware.
+**kiFOSSk** is a minimal, privacy-focused Android kiosk browser for displaying remote dashboards (ADS-B flight trackers, Home Assistant, Grafana) on dedicated hardware. Built with zero Google Play Services dependencies — runs natively on AOSP, GrapheneOS, and standard Android.
 
-Built with zero Google Play Services dependencies, it runs natively on AOSP, GrapheneOS, and standard Android devices. Perfect for turning old phones into always-on informational displays.
-
-## 🚀 Latest Release: v1.1.0 (August 2026)
+## 🚀 Latest Release: v1.1.1 (September 2026)
 
 What's New:
-- Kotlin 2.0 + SDK 35 upgrade
-- Long-press anywhere to access settings (no more corner hunting)
-- Fixed launcher status detection on fresh installs
-- Graceful network error handling (no more Chromium error pages)
+- Fixed back-navigation bug that could escape kiosk mode on all API levels
+- Removed the non-functional "Boot Autostart" toggle — boot behavior comes from the home-launcher role
+- Migrated from deprecated `onBackPressed()` to `OnBackPressedDispatcher`
+- Refactored SharedPreferences access through `KioskPrefs` for cleaner state management
 
 [Full Changelog →](CHANGELOG.md) | [Download APK](https://github.com/ShinyDiscoBallsDev/kiFOSSk/releases) | [F-Droid](https://f-droid.org/packages/com.shinydiscoballsdev.kifossk/) | [☕ Ko-fi](https://ko-fi.com/shinydiscoballsdev)
 
 ## Features
 
-- **Home Launcher Mode**: Automatically launches on boot without needing Device Owner privileges.
-- **Lockscreen Bypass**: Uses `setShowWhenLocked()` to skip the lock screen on startup.
-- **WebView Kiosk**: Fullscreen immersive mode, back button disabled, long-press to access settings.
-- **Gesture Protection**: Long-press restricted to bottom-right corner zone (±80px) with 10-second cooldown to prevent accidental triggers. WebView native context menu fully disabled — no text selection, no "Copy/Share" popups.
-- **Auto-Refresh**: Optional automatic page reload with configurable intervals (10s, 30s, 1min, 5min, 15min). Pauses when app is backgrounded to save battery.
-- **Network Resilience**: Automatic retry with exponential backoff (max 10 attempts) when offline — no infinite loops or battery drain.
-- **Battery Optimization**: Includes a one-click dialog to request "Unrestricted" battery usage.
-- **Customizable**: Set dashboard URL, screen timeout, orientation (portrait/landscape/auto), boot autostart, and auto-refresh interval.
-- **Privacy First**: No analytics, no telemetry, no internet permissions beyond your configured URL.
-- **URL Sanitization**: Only `http`/`https` schemes allowed — blocks `javascript:`, `file:`, `intent:`, `content:`, `data:` redirects.
-
-## Use Cases
-
-- **ADS-B Flight Displays**: Perfect for aviation enthusiasts near airports.
-- **Home Dashboards**: Always-on view of Home Assistant, Prometheus, or custom Flask apps.
-- **Digital Signage**: Simple, reliable display for offices, lobbies, or retail spaces.
-- **Privacy Kiosks**: Run on GrapheneOS for maximum security in public spaces.
+- **Home Launcher Mode**: Boots automatically — no Device Owner privileges needed.
+- **Lockscreen Bypass**: Skips lock screen on startup via `setShowWhenLocked()`.
+- **WebView Kiosk**: Fullscreen immersive mode, back button disabled, long-press for settings.
+- **Gesture Protection**: Long-press anywhere with 10-second cooldown. WebView context menu fully disabled — no text selection, no "Copy/Share" popups.
+- **Auto-Refresh**: Configurable intervals (10s–15min). Pauses when backgrounded.
+- **Network Resilience**: Exponential backoff retry (max 10 attempts) — no infinite loops or battery drain.
+- **Privacy First**: No analytics, no telemetry, no internet permissions beyond your configured URL. Three permissions total: `INTERNET`, `ACCESS_NETWORK_STATE`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.
+- **URL Sanitization**: Only `http`/`https` allowed — blocks `javascript:`, `file:`, `intent:`, `content:`, `data:`.
+- **Zero Dependencies**: No Google Play Services, no Firebase, no analytics SDKs.
 
 ## Installation
 
-### Option A: F-Droid (Recommended)
+### F-Droid (Recommended)
 
-**Now available!** Install directly from [F-Droid](https://f-droid.org/packages/com.shinydiscoballsdev.kifossk/)! Auto-updates when new versions release.
+Install from [F-Droid](https://f-droid.org/packages/com.shinydiscoballsdev.kifossk/) for auto-updates on new releases.
 
-### Option B: Sideloading (APK)
+### Obtanium
 
-1. Download the latest `kiFOSSk-vX.Y.Z-release.apk` from the [Releases](https://github.com/ShinyDiscoBallsDev/kiFOSSk/releases) page.
-2. Transfer to your device and open the APK file.
-3. Enable "Install Unknown Apps" when prompted.
-4. Tap "Install" (may show Play Protect warning — tap "Install anyway").
-5. Open the app, configure your dashboard URL in Settings.
-6. Tap "Set as Home Launcher" when prompted (or go to Settings > Apps > Default Apps > Home App).
+Install and auto-update via [Obtainium](https://obtainium.imranr.dev/). Obtanium pulls releases directly from GitHub. 
 
-**Note**: Google Play Protect may warn about "unauthorized developer" when installing. This is expected for sideloaded apps — kiFOSSk is not signed by a Google-certified certificate authority. The app contains no malicious code. Tap "Install anyway" to proceed.
+Add kiFOSSk using this URL: https://github.com/ShinyDiscoBallsDev/kiFOSSk
 
-**Samsung / One UI users**: Play Protect is especially aggressive on Samsung devices due to Knox integration. If installation is silently blocked:
-1. Open **Google Play Store** → Menu → **Play Protect**
-2. Tap **Scan**
-3. If kiFOSSk appears under "Harmful apps found," tap **Details** → **Allow anyway**
-4. Retry the APK installation
+### Sideloading (APK)
 
-This does not happen on OxygenOS, Pixel, or GrapheneOS — those platforms show the "Install anyway" button directly.
+1. Download `kiFOSSk-vX.Y.Z-release.apk` from [Releases](https://github.com/ShinyDiscoBallsDev/kiFOSSk/releases)
+2. Open the APK on your device and enable "Install Unknown Apps" when prompted
+3. Tap "Install" (Play Protect may warn about unauthorized developer. Tap "Install anyway")
 
-### Option C: Build from Source
+**Samsung/One UI**: Play Protect can silently block installation. Go to Play Store → Menu → Play Protect → Scan → Details → Allow anyway, then retry.
 
-git clone https://github.com/ShinyDiscoBallsDev/kiFOSSk.git
-cd kiFOSSk
-./gradlew assembleRelease
+### Build from Source
 
-APK located at: app/build/outputs/apk/release/kiFOSSk-X.Y.Z-release.apk
+    git clone https://github.com/ShinyDiscoBallsDev/kiFOSSk.git
+    cd kiFOSSk
+    ./gradlew assembleRelease
 
-## Configuration Guide
+APK at: `app/build/outputs/apk/release/kiFOSSk-X.Y.Z-release.apk`
 
-### First-Time Setup
+## Setup
 
-1. Open Settings: Long-press the **bottom-right corner** of the screen for 2 seconds.
-2. Enter URL: Input your dashboard address (e.g., http://192.168.50.152:3001).
-3. Enable Boot Autostart: Toggle the switch ON.
-4. Battery Exemption: Tap "Request Unrestricted Battery" and confirm in system settings.
-5. Set as Home App: Tap "Set as Home Launcher" and select "Always".
-6. Reboot: The app should launch automatically on boot.
+1. Long-press anywhere on screen for 2 seconds to open Settings
+2. Enter your dashboard URL (e.g., `http://192.168.50.152:3001`)
+3. Tap "Set as Home Launcher" and select "Always" (battery exemption is requested automatically)
+4. Reboot, app launches automatically
 
-**Note**: Note: Long-press anywhere on the screen to access settings. A 10-second cooldown between accesses prevents accidental triggers.
+**Auto-Refresh**: Toggle in Settings and pick an interval (10s–15min). Pauses when backgrounded.
 
-### Auto-Refresh Setup
+**Switching launchers**: Long-press → Settings → "Switch to Different Launcher". The lockscreen will appear once. This is expected Android behavior.
 
-If your dashboard doesn't auto-refresh server-side:
+## Device Compatibility
 
-1. Long-press the bottom-right corner to open Settings
-2. Toggle "Enable automatic page reload" ON
-3. Select your desired interval (10s–15min)
-4. Tap "Save & Launch"
+kiFOSSk runs on any Android 7.0+ device. Most work without additional configuration.
 
-Auto-refresh automatically pauses when the app is backgrounded and resumes when the page reloads. This prevents unnecessary battery drain when nobody is viewing the display.
+| Device                    | Notes                                                                                                                     |
+|---------------------------|---------------------------------------------------------------------------------------------------------------------------|
+| **Pixel / Stock Android** | Works out of the box. May need to exempt from Adaptive Battery.                                                           |
+| **GrapheneOS**            | Fully compatible. Disable hardened lockscreen for bypass to work.                                                         |
+| **OnePlus / OxygenOS**    | Zero manual configuration required. Verified post-factory-reset.                                                          |
+| **Samsung / One UI**      | Remove from Sleeping Apps, add to Never Optimizing. Play Protect may silently block install — see sideloading note above. |
+| **Xiaomi / MIUI**         | Enable Autostart, set Battery Saver to "No restrictions" in both Settings and Security app.                               |
+| **Custom ROMs**           | Generally good — check your ROM's power management settings.                                                              |
 
-### Temporarily Accessing Other Apps
+**Universal tip**: If the app doesn't launch on boot, verify Home App assignment and disable battery saver.
 
-If kiFOSSk is set as your default home launcher and you need to use other apps:
+## Testing
 
-1. Long-press the bottom-right corner to open Settings
-2. Tap "Switch to Different Launcher"
-3. Select "System Launcher" or your preferred home screen
-4. Swipe through the lockscreen (normal behavior resumes without kiFOSSk as home)
-5. Use your device normally
-6. To return to kiosk mode: Open kiFOSSk → Settings → "Set as Home Launcher"
+kiFOSSk includes automated UI testing across 9 AVD configurations (API 24–35, multiple form factors) running in parallel. This harness caught the v1.1.1 back-navigation bug.
 
-**Note**: When switching away from kiFOSSk as your home launcher, the lockscreen will appear. This is expected Android behavior — the lockscreen bypass only applies while kiFOSSk is the active home app.
-
-Alternatively: Long-press the home button and select kiFOSSk as temporary launcher.
-
-### Uninstalling kiFOSSk
-
-You can uninstall via ADB without changing your launcher:
-
-adb uninstall com.shinydiscoballsdev.kifossk
-
-Or via phone: Settings > Apps > kiFOSSk > Uninstall. The system will prompt you to select a new default launcher after removal.
-
-### Advanced Options
-
-- Orientation: Choose Portrait, Landscape, or Auto (state preserved across rotation).
-- Screen Timeout: Toggle to keep screen on while charging.
-- Auto-Refresh: Enable/disable with configurable interval (10s–15min).
-
-## Privacy & Security
-
-### Security Model
-
-kiFOSSk was built with a **minimal attack surface** philosophy. Every permission, dependency, and background process was scrutinized — if it wasn't strictly necessary for a kiosk browser, it was cut.
-
-- **URL Sanitization**: `UrlValidator.kt` blocks all non-HTTP(S) schemes (`javascript:`, `file:`, `intent:`, `content:`, `data:`).
-- **Gesture Protection**: Bottom-right corner zone (±80px) + 10s cooldown prevents accidental settings access. WebView native long-press context menu fully disabled — no text selection, no "Copy/Share" popups.
-- **CSS Hardening**: `user-select: none` injected on page load to prevent text selection highlighting.
-- **Network Safety**: Coroutine-based retry with `MAX_RETRIES=10` and exponential backoff — no infinite loops.
-- **Minimal Permissions**: Only `INTERNET`, `ACCESS_NETWORK_STATE`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`. That's it.
-- **No Background Services**: All logic runs in the foreground Activity. No foreground service, no background workers.
-- **Local Storage Only**: All settings stored in private SharedPreferences. No cloud sync.
-- **Zero Dependencies**: No Google Play Services, no Firebase, no analytics SDKs.
-- **Network Isolation**: Only connects to the URL you explicitly configure.
-
-### Scope and Permissions
-
-kiFOSSk is purpose-built as a **simple kiosk browser** — nothing more, nothing less. Because the scope is intentionally narrow, the permission footprint is minimal:
-
-| Permission                             | Why kiFOSSk Needs It                                 |
-|----------------------------------------|------------------------------------------------------|
-| `INTERNET`                             | Fetch your dashboard URL                             |
-| `ACCESS_NETWORK_STATE`                 | Detect connectivity for retry logic                  |
-| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Allow always-on display without Doze killing the app |
-
-**3 permissions. No location tracking. No camera access. No NFC. No notification spam. No background services.**
-
-For users who prioritize simplicity, privacy, and transparency over feature breadth, kiFOSSk provides a focused solution that does one thing well.
-
-### GrapheneOS Users
-
-This app is fully compatible with GrapheneOS.
-
-- Lockscreen: May still appear if "Hardened Mode" is enabled. Disable lockscreen or accept manual unlock.
-- Background Restrictions: Ensure "Unrestricted" battery mode is set manually.
-
-### Stock Android / Pixel Users
-
-Most stock Android devices are well-supported out of the box.
-
-- Adaptive Battery: May need to exempt kiFOSSk from Adaptive Battery restrictions (Settings > Battery > Adaptive Preferences > Exempt apps).
-- Doze Mode: Kick the device awake after heavy idle periods — kiosk mode should prevent this automatically.
-- App Standby Buckets: Keep kiFOSSk in the "Active" bucket by using it regularly.
-
-### OnePlus / OxygenOS Users
-
-Verified on OxygenOS 13+ with
-- **zero manual configuration required**.
-- **All permission prompts** appear automatically when needed.
-- **No Developer Options** required.
-- **No additional settings** changes needed beyond initial setup.
-- **Tested after factory reset** — only required: install APK, grant permissions, set as Home Launcher.
-- **⚠️ Known Limitation**: After major Android system updates, lock screen may appear once. Normal reboots work without issue. This is an Android OS-level security measure, not a kiFOSSk bug.
-
-*Google Play Protect may warn about "unauthorized developer" when sideloading — tap "Install anyway" to proceed.*
-
-### Samsung / One UI Users
-
-Samsung's One UI has the most aggressive background restrictions.
-
-- Put Apps to Sleep: Settings > Battery > Background Usage Limits > Sleeping Apps > Remove kiFOSSk.
-- Never Optimizing Apps: Settings > Battery > Background Usage Limits > Never Optimizing Apps > Add kiFOSSk.
-- Secure Folder: If you use Secure Folder, install kiFOSSk outside of it for proper boot integration.
-- **Play Protect**: May silently block installation. See [sideloading note](#option-b-sideloading-apk) above for workaround.
-
-### Xiaomi / MIUI Users
-
-MIUI is notorious for killing background apps.
-
-- Autostart: Settings > Apps > Permissions > Autostart > Enable for kiFOSSk.
-- Battery Saver: Settings > Apps > Manage Apps > kiFOSSk > Battery Saver > No restrictions.
-- Security App: Open the Security app > Battery > App Battery Saver > kiFOSSk > No restrictions.
-
-### Custom ROMs (LineageOS, etc.)
-
-Generally work well, but check your specific ROM's power management settings.
-
-- Battery Optimization: Look for equivalent "Ignore optimizations" or "Unrestricted" settings.
-- SELinux: If building from source, ensure SELinux is permissive or properly configured for your ROM.
-
-### Universal Tips for All Devices
-
-If boot autostart fails after initial setup:
-
-1. Check Home Launcher Assignment: Settings > Apps > Default Apps > Home App > Select kiFOSSk.
-2. Disable Battery Saver: Turn off global battery saver mode while using the device as a kiosk.
-3. Stay Awake Setting: Enable Developer Options > Stay awake (keeps screen on while charging).
-4. Restart Test: Reboot the device twice to ensure settings persist through boot cycles.
-5. Logcat Debugging: Use adb logcat | findstr "kifossk" to identify any startup errors.
+Need kiFOSSk tested on a specific device model? [Open an issue](https://github.com/ShinyDiscoBallsDev/kiFOSSk/issues), I'll add it to the test matrix.
 
 ## Known Issues
 
-| Issue                                                                       | Severity | Workaround            |
-|-----------------------------------------------------------------------------|----------|-----------------------|
-| Lock screen may appear after Android system updates (not on normal reboots) | Low      | Unlock and reopen app |
+| Issue                                                                    | Severity | Workaround            |
+|--------------------------------------------------------------------------|----------|-----------------------|
+| Lock screen may appear after Android system updates (not normal reboots) | Low      | Unlock and reopen app |
 
-## 🪩 Planned Features
-
-Things being explored for future versions:
+## Planned Features
 
 - Multi-dashboard cycling with configurable intervals
 - Enhanced menu with About page and direct issue reporting
 - Quad-grid split-screen view for tablets (far future concept)
 
-No timelines, I'm just a solo dev cooking in her free time. ⭐ the repo if you want to follow along.
+No timelines. Solo dev cooking in her free time. ⭐ the repo to follow along.
 
 ## Contributing
 
-Contributions are welcome! Whether it's bug fixes, new features, or documentation improvements:
-
-1. Fork the repository.
-2. Create a feature branch (git checkout -b feature/amazing-feature).
-3. Commit your changes (git commit -m 'Add amazing feature').
-4. Push to the branch (git push origin feature/amazing-feature).
-5. Open a Pull Request.
+1. Fork → feature branch → commit → push → PR
+2. Bug reports and feature requests welcome via [Issues](https://github.com/ShinyDiscoBallsDev/kiFOSSk/issues)
 
 ---
 
-## ☕ Support kiFOSSk
-
-If kiFOSSk has been useful, consider buying me a coffee:
+## ☕ Support
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/shinydiscoballsdev)
 
 kiFOSSk is and always will be free and open source. Donations help cover development time and device testing.
-
----
 
 ## 📄 License
 
@@ -264,3 +127,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 ---
 
 Created by **ShinyDiscoBallsDev**
+
