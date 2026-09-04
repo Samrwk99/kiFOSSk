@@ -134,7 +134,7 @@ class MainActivity : AppCompatActivity() {
                 // Debounce: minimum 10 seconds between setting accesses
                 if (now - lastSettingsOpenTime < SETTINGS_COOLDOWN_MS) return
                 lastSettingsOpenTime = now
-                    startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
+                startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
             }
         })
 
