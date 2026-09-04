@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2026-09
+
+### Fixed
+- **Critical**: Back-navigation bug allowing escape from kiosk mode — `SettingsActivity` back press now saves settings and returns to `MainActivity` via `OnBackPressedDispatcher` instead of relying on empty back stack (affected all API levels; API 24 stayed stuck in Settings, API 35 exited to launcher)
+- Migrated from deprecated `onBackPressed()` overrides to `OnBackPressedDispatcher` in both activities — replaces a deprecated API ahead of future Android versions where it's removed entirely
+
+### Removed
+- **"Boot Autostart" setting** — a ghost from initial development that was past his prime, sorry about this inclusion. The toggle saved a preference nothing ever read; actual boot behavior comes from the home-launcher role. Its one real effect (requesting the battery-optimization exemption) now happens automatically when tapping "Set as Home Launcher".
+
+### Changed
+- Refactored `SettingsActivity` to route all SharedPreferences reads and writes through `KioskPrefs` methods instead of raw `SharedPreferences` calls
+- Condensed README — consolidated device-specific troubleshooting into compact table, merged redundant privacy/security sections, streamlined setup guide
+- Added Obtanium as an installation option in README
+
+### Added
+- `KioskPrefs.getScreenOn()` / `setScreenOn()` — completes full SharedPreferences encapsulation
+
 ## [1.1.0] - 2026-08
 
 ### Changed

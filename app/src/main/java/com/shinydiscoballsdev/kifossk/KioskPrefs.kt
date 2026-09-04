@@ -44,6 +44,14 @@ object KioskPrefs {
         getInstance(context).edit().putString("orientation", orientation).commit()
     }
 
+    fun getScreenOn(context: Context): Boolean {
+        return getInstance(context).getBoolean("screen_on", true)
+    }
+
+    fun setScreenOn(context: Context, value: Boolean) {
+        getInstance(context).edit().putBoolean("screen_on", value).apply()
+    }
+
     fun isAutoRefreshEnabled(context: Context): Boolean {
         return getInstance(context).getBoolean("auto_refresh_enabled", false)
     }

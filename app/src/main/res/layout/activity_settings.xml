@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="24dp">
+    android:padding="24dp"
+    android:focusable="true"
+    android:focusableInTouchMode="true">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -56,23 +57,6 @@
             android:layout_height="wrap_content"
             android:checked="true"
             android:text="Prevent screen timeout while charging"/>
-
-        <!-- Boot Autostart -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Boot Autostart"
-            android:textSize="16sp"
-            android:textColor="?android:attr/textColorSecondary"
-            android:layout_marginTop="24dp"
-            android:layout_marginBottom="8dp"/>
-
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/switchBootAutostart"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:checked="false"
-            android:text="Launch on device startup" />
 
         <!-- Orientation -->
         <TextView
@@ -161,7 +145,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Tip: Long-press any corner to reopen settings"
+            android:text="Tip: Long-press anywhere to reopen settings"
             android:textSize="12sp"
             android:textColor="?android:attr/textColorHint"
             android:gravity="center"

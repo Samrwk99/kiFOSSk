@@ -15,12 +15,12 @@ import android.provider.Settings
 import androidx.appcompat.widget.SwitchCompat
 import android.app.role.RoleManager
 import android.os.Build
+import androidx.activity.OnBackPressedCallback
 
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var editTextUrl: EditText
     private lateinit var switchScreenOn: SwitchCompat
-    private lateinit var switchBootAutostart: SwitchCompat
     private lateinit var spinnerOrientation: Spinner
     private lateinit var switchAutoRefresh: SwitchCompat
     private lateinit var spinnerRefreshInterval: Spinner
@@ -41,8 +41,10 @@ class SettingsActivity : AppCompatActivity() {
 
         // Initialize views
         editTextUrl = findViewById(R.id.editTextUrl)
+        editTextUrl.post {
+            editTextUrl.clearFocus()
+        }
         switchScreenOn = findViewById(R.id.switchScreenOn)
-        switchBootAutostart = findViewById(R.id.switchBootAutostart)
         spinnerOrientation = findViewById(R.id.spinnerOrientation)
         switchAutoRefresh = findViewById(R.id.switchAutoRefresh)
         spinnerRefreshInterval = findViewById(R.id.spinnerRefreshInterval)
@@ -53,15 +55,7 @@ class SettingsActivity : AppCompatActivity() {
 
         // Load existing preferences
         editTextUrl.setText(KioskPrefs.getUrl(this))
-        switchScreenOn.isChecked = KioskPrefs.getInstance(this).getBoolean("screen_on", true)
-        switchBootAutostart.isChecked = KioskPrefs.getInstance(this).getBoolean("boot_autostart", false)
-
-        // Toggle listener for boot autostart
-        switchBootAutostart.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                requestBatteryOptimizationExemption()
-            }
-        }
+        switchScreenOn.isChecked = KioskPrefs.getScreenOn(this)
 
         // Orientation dropdown
         ArrayAdapter.createFromResource(
@@ -103,6 +97,13 @@ class SettingsActivity : AppCompatActivity() {
         btnSave.setOnClickListener {
             saveAndReturn()
         }
+
+        // Handle back press — save settings and return to kiosk
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                saveAndReturn()
+            }
+        })
     }
 
     private fun updateRefreshIntervalSpinnerState() {
@@ -122,15 +123,11 @@ class SettingsActivity : AppCompatActivity() {
      */
     private fun setAsLauncher() {
         // Save current settings before leaving (defensive)
-        val prefs = KioskPrefs.getInstance(this)
-        prefs.edit()
-            .putString("web_url", editTextUrl.text.toString())
-            .putBoolean("screen_on", switchScreenOn.isChecked)
-            .putBoolean("boot_autostart", switchBootAutostart.isChecked)
-            .putBoolean("auto_refresh_enabled", switchAutoRefresh.isChecked)
-            .putInt("auto_refresh_interval", intArrayOf(10, 30, 60, 300, 900)[spinnerRefreshInterval.selectedItemPosition])
-            .commit()
-
+        KioskPrefs.setUrl(this, editTextUrl.text.toString())
+        KioskPrefs.setScreenOn(this, switchScreenOn.isChecked)
+        val intervalValues = intArrayOf(10, 30, 60, 300, 900)
+        KioskPrefs.setAutoRefresh(this, switchAutoRefresh.isChecked, intervalValues[spinnerRefreshInterval.selectedItemPosition])
+        requestBatteryOptimizationExemption()
 
         Toast.makeText(this, "Settings saved! Opening launcher selection...", Toast.LENGTH_SHORT).show()
 
@@ -184,63 +181,32 @@ class SettingsActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         // Save preferences when activity loses focus (defensive backup)
-        val prefs = KioskPrefs.getInstance(this)
-        val editor = prefs.edit()
-        editor.putString("web_url", editTextUrl.text.toString())
-        editor.putBoolean("screen_on", switchScreenOn.isChecked)
-        editor.putBoolean("boot_autostart", switchBootAutostart.isChecked)
-        val orientationIndex = spinnerOrientation.selectedItemPosition
+        KioskPrefs.setUrl(this, editTextUrl.text.toString())
+        KioskPrefs.setScreenOn(this, switchScreenOn.isChecked)
         val orientationMap = mapOf(0 to "landscape", 1 to "portrait", 2 to "auto")
-        editor.putString("orientation", orientationMap[orientationIndex])
-        val refreshIntervalValues = intArrayOf(10, 30, 60, 300, 900)
-        KioskPrefs.setAutoRefresh(
-            this,
-            switchAutoRefresh.isChecked,
-            refreshIntervalValues[spinnerRefreshInterval.selectedItemPosition]
-        )
-        editor.commit()
+        KioskPrefs.setOrientation(this, orientationMap[spinnerOrientation.selectedItemPosition]!!)
+        val intervalValues = intArrayOf(10, 30, 60, 300, 900)
+        KioskPrefs.setAutoRefresh(this, switchAutoRefresh.isChecked, intervalValues[spinnerRefreshInterval.selectedItemPosition])
     }
 
     private fun saveAndReturn() {
-        val prefs = KioskPrefs.getInstance(this)
-        val editor = prefs.edit()
+        KioskPrefs.setUrl(this, editTextUrl.text.toString())
+        KioskPrefs.setScreenOn(this, switchScreenOn.isChecked)
 
-        editor.putString("web_url", editTextUrl.text.toString())
-        editor.putBoolean("screen_on", switchScreenOn.isChecked)
-        editor.putBoolean("boot_autostart", switchBootAutostart.isChecked)
+        val orientationMap = mapOf(0 to "landscape", 1 to "portrait", 2 to "auto")
+        KioskPrefs.setOrientation(this, orientationMap[spinnerOrientation.selectedItemPosition]!!)
 
-// Map orientation selection
-        val orientationIndex = spinnerOrientation.selectedItemPosition
-        val orientationMap = mapOf(
-            0 to "landscape",
-            1 to "portrait",
-            2 to "auto"
-        )
-        editor.putString("orientation", orientationMap[orientationIndex])
-
-        // Auto-refresh settings
         val intervalValues = intArrayOf(10, 30, 60, 300, 900)
-        KioskPrefs.setAutoRefresh(
-            this,
-            switchAutoRefresh.isChecked,
-            intervalValues[spinnerRefreshInterval.selectedItemPosition]
-        )
+        KioskPrefs.setAutoRefresh(this, switchAutoRefresh.isChecked, intervalValues[spinnerRefreshInterval.selectedItemPosition])
 
-// FIX Bug #4: Clear first_run only after URL is validated and saved
-        editor.putBoolean("first_run", false)
+        // FIX Bug #4: Clear first_run only after URL is validated and saved
+        KioskPrefs.setFirstRun(this, false)
 
-        val success = editor.commit()
-
-        if (success) {
-            Toast.makeText(this, "Settings saved!", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(this, "Failed to save settings!", Toast.LENGTH_SHORT).show()
-        }
+        Toast.makeText(this, "Settings saved!", Toast.LENGTH_SHORT).show()
 
         // Return to MainActivity
         val intent = Intent(this, MainActivity::class.java)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_CLEAR_TASK
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)
         finish()
     }
