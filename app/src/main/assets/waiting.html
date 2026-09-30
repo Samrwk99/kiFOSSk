@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8">
+<style>
+body{background-color:#1a1a2e;color:#6d4aff;text-align:center;
+font-family:sans-serif;padding-top:35%;margin:0;}
+h2{font-size:5vmin;}
+p{color:#888;font-size:1.8vmin;}
+</style></head>
+<body>
+<h2>Loading...</h2>
+<p id="targetUrl">Connecting...</p>
+<script>
+var url = new URLSearchParams(window.location.search).get('url');
+document.getElementById('targetUrl').textContent = url || '';
+</script>
+</body>
+</html>
