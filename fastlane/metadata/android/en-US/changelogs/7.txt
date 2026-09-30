@@ -1,0 +1,10 @@
+Fix: waiting screen not appearing when URL unreachable on older
+WebView versions (API 24-26), leaving a blank screen (#2) - waiting
+page now loads from bundled asset with 20s watchdog + blank-detect
+backup
+
+Fix: screen stayed awake even with "Prevent screen timeout"
+disabled (#3) - setting now respected immediately
+
+Also: WebView cache disabled during recovery, subresource errors
+don't trigger waiting page, JS injection guarded against errors
