@@ -1,1 +1,1 @@
-Lightweight FOSS kiosk browser for dashboards. Zero Google services.
+Lightweight FOSS kiosk browser for dashboards. Auto-recovery, zero Google.
