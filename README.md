@@ -11,13 +11,13 @@
 
 **kiFOSSk** is a minimal, privacy-focused Android kiosk browser for displaying remote dashboards (ADS-B flight trackers, Home Assistant, Grafana) on dedicated hardware. Built with zero Google Play Services dependencies — runs natively on AOSP, GrapheneOS, and standard Android.
 
-## 🚀 Latest Release: v1.1.1 (September 2026)
+## 🚀 Latest Release: v1.1.2 (September 2026)
 
 What's New:
-- Fixed back-navigation bug that could escape kiosk mode on all API levels
-- Removed the non-functional "Boot Autostart" toggle — boot behavior comes from the home-launcher role
-- Migrated from deprecated `onBackPressed()` to `OnBackPressedDispatcher`
-- Refactored SharedPreferences access through `KioskPrefs` for cleaner state management
+- Fixed waiting screen not appearing when the target URL is unreachable on older WebViews (Issue #2)
+- Fixed screen timeout ignored even when "Prevent screen timeout" was disabled (Issue #3)
+- Added 20s navigation watchdog and blank-render detection as backup layers
+- WebView cache disabled during error recovery; subresource errors no longer trigger the waiting page
 
 [Full Changelog →](CHANGELOG.md) | [Download APK](https://github.com/ShinyDiscoBallsDev/kiFOSSk/releases) | [F-Droid](https://f-droid.org/packages/com.shinydiscoballsdev.kifossk/) | [☕ Ko-fi](https://ko-fi.com/shinydiscoballsdev)
 
@@ -28,8 +28,7 @@ What's New:
 - **WebView Kiosk**: Fullscreen immersive mode, back button disabled, long-press for settings.
 - **Gesture Protection**: Long-press anywhere with 10-second cooldown. WebView context menu fully disabled — no text selection, no "Copy/Share" popups.
 - **Auto-Refresh**: Configurable intervals (10s–15min). Pauses when backgrounded.
-- **Network Resilience**: Exponential backoff retry (max 10 attempts) — no infinite loops or battery drain.
-- **Privacy First**: No analytics, no telemetry, no internet permissions beyond your configured URL. Three permissions total: `INTERNET`, `ACCESS_NETWORK_STATE`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.
+- **Network Resilience**: Automatic retry with exponential backoff, plus a friendly waiting screen when the host is unreachable — no blank screens, no manual refresh.- **Privacy First**: No analytics, no telemetry, no internet permissions beyond your configured URL. Three permissions total: `INTERNET`, `ACCESS_NETWORK_STATE`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.
 - **URL Sanitization**: Only `http`/`https` allowed — blocks `javascript:`, `file:`, `intent:`, `content:`, `data:`.
 - **Zero Dependencies**: No Google Play Services, no Firebase, no analytics SDKs.
 
@@ -89,8 +88,7 @@ kiFOSSk runs on any Android 7.0+ device. Most work without additional configurat
 
 ## Testing
 
-kiFOSSk includes automated UI testing across 9 AVD configurations (API 24–35, multiple form factors) running in parallel. This harness caught the v1.1.1 back-navigation bug.
-
+kiFOSSk includes automated UI testing across 12 AVD configurations (API 24–35, phones, tablets, and foldables) running in parallel. This harness caught and convicted the v1.1.1 back-navigation bug and verified the v1.1.2 fixes.
 Need kiFOSSk tested on a specific device model? [Open an issue](https://github.com/ShinyDiscoBallsDev/kiFOSSk/issues), I'll add it to the test matrix.
 
 ## Known Issues

@@ -2,12 +2,13 @@ package com.shinydiscoballsdev.kifossk
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.os.SystemClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import android.util.Log
 
 object NetworkRetryHelper {
 
@@ -15,6 +16,13 @@ object NetworkRetryHelper {
     private const val INITIAL_DELAY_MS = 3000L
     private var currentJob: Job? = null
     var retryCount: Int = 0
+
+    private const val HOST_RETRY_INITIAL_MS = 5000L
+    private const val HOST_RETRY_MAX_MS = 300_000L
+    private const val HOST_RETRY_RESET_AFTER_MS = 600_000L
+    private var hostJob: Job? = null
+    private var hostRetryAttempt = 0
+    private var lastHostErrorTime = 0L
 
     fun startWaitingForNetwork(
         context: Context,
@@ -26,7 +34,7 @@ object NetworkRetryHelper {
 
         currentJob = CoroutineScope(Dispatchers.Main).launch {
             while (!isNetworkAvailable(context) && retryCount < MAX_RETRIES) {
-                delay(INITIAL_DELAY_MS * (retryCount + 1).toLong())  // Exponential backoff
+                delay(INITIAL_DELAY_MS * (retryCount + 1).toLong())
                 retryCount++
             }
 
@@ -48,6 +56,36 @@ object NetworkRetryHelper {
 
     fun resetRetryCount() {
         retryCount = 0
+    }
+
+    fun startHostRetry(
+        context: Context,
+        targetUrl: String,
+        onRecovered: suspend (String) -> Unit
+    ) {
+        hostJob?.cancel()
+
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastHostErrorTime > HOST_RETRY_RESET_AFTER_MS) {
+            hostRetryAttempt = 0
+        }
+        lastHostErrorTime = now
+
+        hostJob = CoroutineScope(Dispatchers.Main).launch {
+            val attempt = hostRetryAttempt.coerceAtMost(6)
+            val delayMs = (HOST_RETRY_INITIAL_MS shl attempt).coerceAtMost(HOST_RETRY_MAX_MS)
+            Log.d("KioskRetry", "Attempting retry #$attempt in ${delayMs}ms")
+            delay(delayMs)
+            hostRetryAttempt++
+            onRecovered.invoke(targetUrl)
+        }
+    }
+
+    fun stopHostRetry() {
+        hostJob?.cancel()
+        hostJob = null
+        hostRetryAttempt = 0
+        lastHostErrorTime = 0L
     }
 
     fun createWaitingPage(targetUrl: String): String {

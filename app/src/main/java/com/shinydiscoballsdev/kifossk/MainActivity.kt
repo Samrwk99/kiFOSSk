@@ -11,10 +11,14 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AppCompatActivity
+import android.webkit.WebSettings
+import android.graphics.Bitmap
 
 @SuppressLint("SetJavaScriptEnabled")
 class MainActivity : AppCompatActivity() {
@@ -28,6 +32,21 @@ class MainActivity : AppCompatActivity() {
     private var lastSettingsOpenTime = 0L
     private val SETTINGS_COOLDOWN_MS = 10_000L  // 10 seconds
     private var currentUrl = ""  // Track URL for retry
+
+    private val navHandler = Handler(Looper.getMainLooper())
+    private var watchdogRunnable: Runnable? = null
+    companion object {
+        private const val PAGE_LOAD_TIMEOUT_MS = 20_000L
+    }
+
+    private fun applyKeepScreenOnFlag() {
+        val keepScreenOn = KioskPrefs.getScreenOn(this)
+        if (keepScreenOn) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,7 +64,8 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Issue #3: respect user's Keep Screen On preference
+        applyKeepScreenOnFlag()
 
         // Block back navigation — kiosk mode
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -88,35 +108,76 @@ class MainActivity : AppCompatActivity() {
             builtInZoomControls = false
             useWideViewPort = true
             loadWithOverviewMode = true
+            cacheMode = WebSettings.LOAD_NO_CACHE
         }
         webView.setOnLongClickListener { true }
+
+        // SINGLE WebViewClient — the old duplicate dead assignment is gone.
         webView.webViewClient = object : WebViewClient() {
+
+            override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+
+                if (url.startsWith("file:") || url.startsWith("about:") || url.startsWith("data:")) return
+
+                // Re-arm: one watchdog per navigation, never stacked
+                watchdogRunnable?.let { navHandler.removeCallbacks(it) }
+
+                watchdogRunnable = Runnable {
+                    android.util.Log.w("KioskLoad", "WATCHDOG: no page completion for $url in ${PAGE_LOAD_TIMEOUT_MS / 1000}s — forcing waiting page")
+                    currentUrl = KioskPrefs.getUrl(this@MainActivity)
+                    loadWaitingPage(currentUrl, failedOverNetwork = true)
+                }.also { navHandler.postDelayed(it, PAGE_LOAD_TIMEOUT_MS) }
+            }
+
+
             override fun onPageFinished(view: WebView, url: String) {
+                super.onPageFinished(view, url)
+
+                // Load completed — stand down the watchdog
+                watchdogRunnable?.let { navHandler.removeCallbacks(it) }
+                watchdogRunnable = null
+                // Guard JS injection — documentElement can be null on
+                // about:blank (waiting page) and chrome-error:// pages
                 view.evaluateJavascript(
-                    "document.documentElement.style.webkitUserSelect = 'none';" +
-                            "document.documentElement.style.userSelect = 'none';",
+                    "if (document.documentElement) {" +
+                            "document.documentElement.style.webkitUserSelect = 'none';" +
+                            "document.documentElement.style.userSelect = 'none';}",
                     null
                 )
 
+                // Empty-content watchdog
+                if (!url.startsWith("file:") && !url.startsWith("about:") && !url.startsWith("data:")) {
+                    view.evaluateJavascript(
+                        "(document.body && document.body.innerText.trim().length > 0) ? 'ok' : 'empty'"
+                    ) { result ->
+                        if (result == "\"empty\"") {
+                            android.util.Log.i("KioskLoad", "onPageFinished: empty body for $url — fallback to waiting page")
+                            currentUrl = KioskPrefs.getUrl(this@MainActivity)
+                            loadWaitingPage(currentUrl, failedOverNetwork = true)
+                        }
+                    }
+                }
                 // Auto-refresh setup (runs on every page load)
-                setupAutoRefresh(url)
-            }
-        }
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView, url: String) {
-                view.evaluateJavascript(
-                    "document.documentElement.style.webkitUserSelect = 'none';" +
-                            "document.documentElement.style.userSelect = 'none';",
-                    null
-                )
-                setupAutoRefresh(url)
+                setupAutoRefresh()
             }
 
-            override fun onReceivedError(view: WebView?, request: android.webkit.WebResourceRequest?, error: android.webkit.WebResourceError?) {
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
                 super.onReceivedError(view, request, error)
+
+                // Self-immunity: never react to errors on our own waiting page
+                val urlStr = request?.url?.toString() ?: ""
+                if (urlStr.startsWith("about:") || urlStr.startsWith("file:///android_asset/")) return
+
+                // FIX #3: only main-frame failures trigger the waiting page;
+                // subresource 404s must not hijack the kiosk
                 if (request?.isForMainFrame == true) {
                     currentUrl = KioskPrefs.getUrl(this@MainActivity)
-                    loadWaitingPage(currentUrl)
+                    loadWaitingPage(currentUrl, failedOverNetwork = true)
                 }
             }
         }
@@ -167,21 +228,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ─── AUTO-REFRESH LOGIC ─────────────────────────────────────────────
-    private fun setupAutoRefresh(currentUrl: String) {
-        // Stop any existing refresh loop first
-        stopAutoRefresh()
+    private fun setupAutoRefresh() {
+        // FIX #2: clear ALL pending posts unconditionally, then schedule
+        // exactly one — kills the double-reschedule drift
+        refreshHandler?.removeCallbacksAndMessages(null)
 
         if (!KioskPrefs.isAutoRefreshEnabled(this)) return
 
         val intervalSeconds = KioskPrefs.getAutoRefreshInterval(this)
         val intervalMs = intervalSeconds * 1000L
 
-        refreshHandler = Handler(Looper.getMainLooper())
+        if (refreshHandler == null) refreshHandler = Handler(Looper.getMainLooper())
+
         refreshRunnable = object : Runnable {
             override fun run() {
                 if (KioskPrefs.isAutoRefreshEnabled(this@MainActivity)) {
-                    webView.loadUrl(currentUrl) // Reload current URL
-                    setupAutoRefresh(currentUrl) // Re-schedule (recursive)
+                    // Read URL fresh each tick — no stale captured copies
+                    currentUrl = KioskPrefs.getUrl(this@MainActivity)
+                    webView.loadUrl(currentUrl)
+                    refreshHandler?.postDelayed(this, intervalMs)  // simple self-reschedule
                 }
             }
         }
@@ -190,7 +255,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopAutoRefresh() {
-        refreshRunnable?.let { refreshHandler?.removeCallbacks(it) }
+        refreshHandler?.removeCallbacksAndMessages(null)
         refreshHandler = null
         refreshRunnable = null
     }
@@ -203,6 +268,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         // Refresh loop resumes in onPageFinished() after page loads
+        applyKeepScreenOnFlag()
     }
 
     override fun dispatchTouchEvent(event: MotionEvent?): Boolean {
@@ -221,23 +287,24 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         stopAutoRefresh()
+        navHandler.removeCallbacksAndMessages(null)
         NetworkRetryHelper.stopWaiting()
+        NetworkRetryHelper.stopHostRetry()
         super.onDestroy()
     }
 
     @SuppressLint("SetTextI18n")
-    private fun loadWaitingPage(targetUrl: String) {
-        val waitingHtml = NetworkRetryHelper.createWaitingPage(targetUrl)
-
+    private fun loadWaitingPage(targetUrl: String, failedOverNetwork: Boolean = false) {
         webView.setBackgroundColor(android.graphics.Color.parseColor("#1a1a2e"))
-        webView.loadDataWithBaseURL(null, waitingHtml, "text/html", "UTF-8", null)
 
-        NetworkRetryHelper.startWaitingForNetwork(
-            context = this,
-            targetUrl = targetUrl,
-            onConnected = { url ->
-                webView.loadUrl(url)
-            }
-        )
+        // Issue #2 FIX: loadUrl with real asset instead of loadDataWithBaseURL
+        val encodedUrl = android.net.Uri.encode(targetUrl)
+        webView.loadUrl("file:///android_asset/waiting.html?url=$encodedUrl")
+
+        if (failedOverNetwork) {
+            NetworkRetryHelper.startHostRetry(this, targetUrl) { url -> webView.loadUrl(url) }
+        } else {
+            NetworkRetryHelper.startWaitingForNetwork(this, targetUrl) { url -> webView.loadUrl(url) }
+        }
     }
 }
