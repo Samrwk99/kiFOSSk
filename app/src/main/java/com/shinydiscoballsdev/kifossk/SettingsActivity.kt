@@ -31,10 +31,21 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+
+        // Show over lockscreen (API 27+) — lock-screen wake only.
+        // NOTE: FLAG_KEEP_SCREEN_ON deliberately NOT added here (Issue #3):
+        // it ignored the screen_on preference. Timeout is governed by
+        // applyKeepScreenOnFlag(), which respects the switch below.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
-            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                        android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+            )
         }
 
         setContentView(R.layout.activity_settings)
@@ -56,6 +67,12 @@ class SettingsActivity : AppCompatActivity() {
         // Load existing preferences
         editTextUrl.setText(KioskPrefs.getUrl(this))
         switchScreenOn.isChecked = KioskPrefs.getScreenOn(this)
+
+        // Issue #3: apply initial flag state, and follow the switch live
+        applyKeepScreenOnFlag()
+        switchScreenOn.setOnCheckedChangeListener { _, _ ->
+            applyKeepScreenOnFlag()
+        }
 
         // Orientation dropdown
         ArrayAdapter.createFromResource(
@@ -87,7 +104,6 @@ class SettingsActivity : AppCompatActivity() {
         // Check launcher status on load
         updateLauncherStatus()
 
-
         // Set as Launcher button handler
         btnSetLauncher.setOnClickListener {
             setAsLauncher()
@@ -106,6 +122,15 @@ class SettingsActivity : AppCompatActivity() {
         })
     }
 
+    // Issue #3: FLAG_KEEP_SCREEN_ON driven by the switch, not forced on
+    private fun applyKeepScreenOnFlag() {
+        if (switchScreenOn.isChecked) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     private fun updateRefreshIntervalSpinnerState() {
         val isEnabled = switchAutoRefresh.isChecked
         spinnerRefreshInterval.isEnabled = isEnabled
@@ -114,6 +139,7 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        applyKeepScreenOnFlag()
         // Refresh launcher status when returning from system settings
         updateLauncherStatus()
     }
@@ -138,7 +164,6 @@ class SettingsActivity : AppCompatActivity() {
     /**
      * Check if kiFOSSk is the default home launcher and update UI
      */
-
     private fun isDefaultLauncher(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = getSystemService(RoleManager::class.java)
@@ -151,6 +176,7 @@ class SettingsActivity : AppCompatActivity() {
         val resInfo = packageManager.resolveActivity(homeIntent, 0)
         return resInfo?.activityInfo?.packageName == packageName
     }
+
     private fun updateLauncherStatus() {
         val isDefault = isDefaultLauncher()
 
@@ -178,6 +204,7 @@ class SettingsActivity : AppCompatActivity() {
             startActivity(intent)
         }
     }
+
     override fun onPause() {
         super.onPause()
         // Save preferences when activity loses focus (defensive backup)
