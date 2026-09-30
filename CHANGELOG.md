@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.2] - 2026-09
+
+### Fixed
+
+- Critical: Waiting screen never appeared on older WebView versions (API 24-26) when the target URL was unreachable, leaving a permanently blank display (#2) — waiting page now loads from a bundled asset (`file:///android_asset/waiting.html`) instead of inline HTML via `loadDataWithBaseURL(null, ...)`, which old WebViews failed to paint; a 20-second navigation watchdog forces the waiting page if `onPageFinished` never fires, and an empty-content probe detects blank renders and falls back
+- Fix: `onReceivedError` triggered waiting page for subresource failures — now gated on `request.isForMainFrame` so a single failed image doesn't hijack the kiosk
+- Hardening: WebView cache disabled during error recovery (`LOAD_NO_CACHE`) to prevent stale content reappearing
+- Hardening: JS injection guarded — skipped on `about:` origins and null `document.documentElement` (previously threw `TypeError` on error pages)
+- Fix: screen stayed awake even with "Prevent screen timeout" disabled (#3) — `FLAG_KEEP_SCREEN_ON` now applied conditionally in `onCreate` and `onResume` based on the user preference
+- Fix: auto-refresh handler stacking — pending callbacks cleared before rescheduling
+
 ## [1.1.1] - 2026-09
 
 ### Fixed
