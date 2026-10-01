@@ -1,310 +1,362 @@
 package com.shinydiscoballsdev.kifossk
 
 import android.annotation.SuppressLint
+import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
-import android.net.ConnectivityManager
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.view.GestureDetector
-import android.view.MotionEvent
-import android.view.View
-import android.view.WindowManager
-import android.webkit.WebResourceError
+import android.os.Environment
+import android.webkit.CookieManager
+import android.webkit.DownloadListener
+import android.webkit.JavascriptInterface
+import android.webkit.PermissionRequest
+import android.webkit.URLUtil
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import android.webkit.WebSettings
-import android.graphics.Bitmap
+import androidx.core.content.ContextCompat
+import android.provider.MediaStore
+import android.content.ContentValues
+import android.util.Base64
+import java.io.File
+import java.io.FileOutputStream
 
 @SuppressLint("SetJavaScriptEnabled")
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private lateinit var gestureDetector: GestureDetector
-    private var refreshHandler: Handler? = null
-    private var refreshRunnable: Runnable? = null
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+    private var fileChooserResultCode = 1
 
-    // Gesture hardening fields
-    private var lastSettingsOpenTime = 0L
-    private val SETTINGS_COOLDOWN_MS = 10_000L  // 10 seconds
-    private var currentUrl = ""  // Track URL for retry
-
-    private val navHandler = Handler(Looper.getMainLooper())
-    private var watchdogRunnable: Runnable? = null
     companion object {
-        private const val PAGE_LOAD_TIMEOUT_MS = 20_000L
+        private const val PREFS_NAME = "sillytavern_prefs"
+        private const val KEY_LAST_WAS_SETTINGS = "last_was_settings"
+        private const val DEFAULT_URL = "http://localhost:8000"
+        const val EXTRA_RELOAD = "extra_reload"
     }
 
-    private fun applyKeepScreenOnFlag() {
-        val keepScreenOn = KioskPrefs.getScreenOn(this)
-        if (keepScreenOn) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        results.forEach { (perm, granted) ->
+            if (granted) {
+                android.util.Log.d("Permissions", "$perm granted")
+            }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Wake screen and show over lockscreen (API 27+)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                        WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
-            )
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val lastWasSettings = prefs.getBoolean(KEY_LAST_WAS_SETTINGS, false)
+
+        if (lastWasSettings) {
+            prefs.edit().putBoolean(KEY_LAST_WAS_SETTINGS, false).apply()
+            startActivity(Intent(this, SettingsActivity::class.java))
+            return
         }
 
-        // Issue #3: respect user's Keep Screen On preference
-        applyKeepScreenOnFlag()
+        prefs.edit().putBoolean(KEY_LAST_WAS_SETTINGS, false).apply()
+        requestNotificationPermission()
+        setupWebView()
+    }
 
-        // Block back navigation — kiosk mode
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                // Do nothing — kiosk mode
+    private fun requestNotificationPermission() {
+        val perms = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED) {
+                perms.add(android.Manifest.permission.POST_NOTIFICATIONS)
             }
-        })
-
-        val isFirstRun = KioskPrefs.isFirstRun(this)
-
-        if (isFirstRun) {
-            // Don't clear first_run yet - wait until URL is validated
-            startActivity(Intent(this, SettingsActivity::class.java))
-            finish()
-        } else {
-            setupWebView()
+        }
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) !=
+            PackageManager.PERMISSION_GRANTED) {
+            perms.add(android.Manifest.permission.CAMERA)
+        }
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED) {
+            perms.add(android.Manifest.permission.RECORD_AUDIO)
+        }
+        if (perms.isNotEmpty()) {
+            requestPermissionLauncher.launch(perms.toTypedArray())
         }
     }
 
-    @SuppressLint("SetJavaScriptEnabled", "MissingPermission")
+    @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
-
         val url = KioskPrefs.getUrl(this)
-        currentUrl = url
-        val orientation = KioskPrefs.getOrientation(this)
 
+        val orientation = KioskPrefs.getOrientation(this)
         when (orientation) {
             "landscape" -> requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             "portrait" -> requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             "auto" -> requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
 
-        hideSystemUI()
+        if (KioskPrefs.getScreenOn(this)) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
 
         webView = WebView(this)
         webView.setBackgroundColor(android.graphics.Color.parseColor("#1a1a2e"))
+
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            builtInZoomControls = false
+            databaseEnabled = true
+            builtInZoomControls = true
+            displayZoomControls = false
             useWideViewPort = true
             loadWithOverviewMode = true
-            cacheMode = WebSettings.LOAD_NO_CACHE
+            cacheMode = WebSettings.LOAD_DEFAULT
+            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            allowFileAccess = true
+            allowContentAccess = true
+            mediaPlaybackRequiresUserGesture = false
         }
-        webView.setOnLongClickListener { true }
 
-        // SINGLE WebViewClient — the old duplicate dead assignment is gone.
+        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
+
+        webView.addJavascriptInterface(BlobDownloaderInterface(this), "BlobDownloader")
+
         webView.webViewClient = object : WebViewClient() {
-
-            override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                super.onPageStarted(view, url, favicon)
-
-                if (url.startsWith("file:") || url.startsWith("about:") || url.startsWith("data:")) return
-
-                // Re-arm: one watchdog per navigation, never stacked
-                watchdogRunnable?.let { navHandler.removeCallbacks(it) }
-
-                watchdogRunnable = Runnable {
-                    android.util.Log.w("KioskLoad", "WATCHDOG: no page completion for $url in ${PAGE_LOAD_TIMEOUT_MS / 1000}s — forcing waiting page")
-                    currentUrl = KioskPrefs.getUrl(this@MainActivity)
-                    loadWaitingPage(currentUrl, failedOverNetwork = true)
-                }.also { navHandler.postDelayed(it, PAGE_LOAD_TIMEOUT_MS) }
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val url = request?.url?.toString() ?: return false
+                if (url.startsWith("blob:")) {
+                    view?.evaluateJavascript(
+                        """
+                        (function() {
+                            fetch("$url")
+                                .then(r => r.blob())
+                                .then(blob => {
+                                    return new Promise((resolve) => {
+                                        const reader = new FileReader();
+                                        reader.onloadend = function() {
+                                            const base64 = reader.result.split(',')[1];
+                                            const mime = blob.type || 'application/octet-stream';
+                                            BlobDownloader.downloadBase64(base64, mime, 'download');
+                                            resolve();
+                                        };
+                                        reader.readAsDataURL(blob);
+                                    });
+                                });
+                        })();
+                        """.trimIndent(), null
+                    )
+                    return true
+                }
+                return false
             }
 
-
-            override fun onPageFinished(view: WebView, url: String) {
+            override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-
-                // Load completed — stand down the watchdog
-                watchdogRunnable?.let { navHandler.removeCallbacks(it) }
-                watchdogRunnable = null
-                // Guard JS injection — documentElement can be null on
-                // about:blank (waiting page) and chrome-error:// pages
-                view.evaluateJavascript(
-                    "if (document.documentElement) {" +
-                            "document.documentElement.style.webkitUserSelect = 'none';" +
-                            "document.documentElement.style.userSelect = 'none';}",
-                    null
-                )
-
-                // Empty-content watchdog
-                if (!url.startsWith("file:") && !url.startsWith("about:") && !url.startsWith("data:")) {
-                    view.evaluateJavascript(
-                        "(document.body && document.body.innerText.trim().length > 0) ? 'ok' : 'empty'"
-                    ) { result ->
-                        if (result == "\"empty\"") {
-                            android.util.Log.i("KioskLoad", "onPageFinished: empty body for $url — fallback to waiting page")
-                            currentUrl = KioskPrefs.getUrl(this@MainActivity)
-                            loadWaitingPage(currentUrl, failedOverNetwork = true)
-                        }
-                    }
-                }
-                // Auto-refresh setup (runs on every page load)
-                setupAutoRefresh()
-            }
-
-            override fun onReceivedError(
-                view: WebView?,
-                request: WebResourceRequest?,
-                error: WebResourceError?
-            ) {
-                super.onReceivedError(view, request, error)
-
-                // Self-immunity: never react to errors on our own waiting page
-                val urlStr = request?.url?.toString() ?: ""
-                if (urlStr.startsWith("about:") || urlStr.startsWith("file:///android_asset/")) return
-
-                // FIX #3: only main-frame failures trigger the waiting page;
-                // subresource 404s must not hijack the kiosk
-                if (request?.isForMainFrame == true) {
-                    currentUrl = KioskPrefs.getUrl(this@MainActivity)
-                    loadWaitingPage(currentUrl, failedOverNetwork = true)
-                }
+                injectBlobInterceptor()
             }
         }
+
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                this@MainActivity.filePathCallback?.onReceiveValue(null)
+                this@MainActivity.filePathCallback = filePathCallback
+
+                val intent = fileChooserParams?.createIntent()
+                try {
+                    startActivityForResult(intent, fileChooserResultCode)
+                } catch (e: Exception) {
+                    this@MainActivity.filePathCallback = null
+                    return false
+                }
+                return true
+            }
+
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                request?.grant(request.resources)
+            }
+        }
+
+        webView.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimeType, contentLength ->
+            if (url.startsWith("blob:")) {
+                return@DownloadListener
+            }
+            val request = DownloadManager.Request(Uri.parse(url))
+            request.setMimeType(mimeType)
+            val cookies = CookieManager.getInstance().getCookie(url)
+            request.addRequestHeader("cookie", cookies)
+            request.addRequestHeader("User-Agent", userAgent)
+            request.setDescription("Downloading...")
+            request.setTitle(URLUtil.guessFileName(url, contentDisposition, mimeType))
+            request.allowScanningByMediaScanner()
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            request.setDestinationInExternalPublicDir(
+                Environment.DIRECTORY_DOWNLOADS,
+                URLUtil.guessFileName(url, contentDisposition, mimeType)
+            )
+
+            val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            dm.enqueue(request)
+            Toast.makeText(applicationContext, "Downloading file...", Toast.LENGTH_LONG).show()
+        })
+
         setContentView(webView)
 
-        gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-
-            override fun onDown(e: MotionEvent): Boolean {
-                return true  // Required: signals GestureDetector to track this gesture sequence
-            }
-
-            override fun onLongPress(e: MotionEvent) {
-                val now = System.currentTimeMillis()
-
-                // Debounce: minimum 10 seconds between setting accesses
-                if (now - lastSettingsOpenTime < SETTINGS_COOLDOWN_MS) return
-                lastSettingsOpenTime = now
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .edit().putBoolean(KEY_LAST_WAS_SETTINGS, true).apply()
                 startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
             }
         })
 
-        // Network check
-        val isConnected = try {
-            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            @Suppress("DEPRECATION")
-            connectivityManager.activeNetworkInfo?.isConnected == true
-        } catch (e: Exception) {
-            false
-        }
-
-        if (isConnected) {
-            webView.loadUrl(url)
-        } else {
-            loadWaitingPage(url)
-        }
+        webView.loadUrl(url)
     }
 
-    @Suppress("DEPRECATION")
-    private fun hideSystemUI() {
-        window.decorView.systemUiVisibility = (
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-                        View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                        View.SYSTEM_UI_FLAG_FULLSCREEN
-                )
+    private fun injectBlobInterceptor() {
+        val js = """
+            (function() {
+                if (window.__blobInterceptorInstalled) return;
+                window.__blobInterceptorInstalled = true;
+
+                const originalCreateObjectURL = URL.createObjectURL;
+                URL.createObjectURL = function(blob) {
+                    const url = originalCreateObjectURL.call(this, blob);
+                    blob.__blobUrl = url;
+                    return url;
+                };
+
+                const originalRevokeObjectURL = URL.revokeObjectURL;
+                URL.revokeObjectURL = function(url) {
+                    originalRevokeObjectURL.call(this, url);
+                };
+
+                document.addEventListener('click', function(e) {
+                    const el = e.target.closest('a[download]');
+                    if (!el) return;
+                    const href = el.getAttribute('href');
+                    if (href && href.startsWith('blob:')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        fetch(href)
+                            .then(r => r.blob())
+                            .then(blob => {
+                                return new Promise((resolve) => {
+                                    const reader = new FileReader();
+                                    reader.onloadend = function() {
+                                        const base64 = reader.result.split(',')[1];
+                                        const mime = blob.type || 'application/octet-stream';
+                                        const filename = el.getAttribute('download') || 'download';
+                                        BlobDownloader.downloadBase64(base64, mime, filename);
+                                        resolve();
+                                    };
+                                    reader.readAsDataURL(blob);
+                                });
+                            });
+                    }
+                }, true);
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(js, null)
     }
 
-    // ─── AUTO-REFRESH LOGIC ─────────────────────────────────────────────
-    private fun setupAutoRefresh() {
-        // FIX #2: clear ALL pending posts unconditionally, then schedule
-        // exactly one — kills the double-reschedule drift
-        refreshHandler?.removeCallbacksAndMessages(null)
-
-        if (!KioskPrefs.isAutoRefreshEnabled(this)) return
-
-        val intervalSeconds = KioskPrefs.getAutoRefreshInterval(this)
-        val intervalMs = intervalSeconds * 1000L
-
-        if (refreshHandler == null) refreshHandler = Handler(Looper.getMainLooper())
-
-        refreshRunnable = object : Runnable {
-            override fun run() {
-                if (KioskPrefs.isAutoRefreshEnabled(this@MainActivity)) {
-                    // Read URL fresh each tick — no stale captured copies
-                    currentUrl = KioskPrefs.getUrl(this@MainActivity)
-                    webView.loadUrl(currentUrl)
-                    refreshHandler?.postDelayed(this, intervalMs)  // simple self-reschedule
-                }
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == fileChooserResultCode) {
+            val results = if (data == null || resultCode != RESULT_OK) {
+                null
+            } else {
+                WebChromeClient.FileChooserParams.parseResult(resultCode, data)
             }
+            filePathCallback?.onReceiveValue(results)
+            filePathCallback = null
         }
-
-        refreshHandler?.postDelayed(refreshRunnable!!, intervalMs)
     }
 
-    private fun stopAutoRefresh() {
-        refreshHandler?.removeCallbacksAndMessages(null)
-        refreshHandler = null
-        refreshRunnable = null
-    }
-
-    override fun onPause() {
-        stopAutoRefresh()
-        super.onPause()
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        if (::webView.isInitialized && intent?.getBooleanExtra(EXTRA_RELOAD, false) == true) {
+            val url = KioskPrefs.getUrl(this)
+            webView.loadUrl(url)
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        // Refresh loop resumes in onPageFinished() after page loads
-        applyKeepScreenOnFlag()
-    }
-
-    override fun dispatchTouchEvent(event: MotionEvent?): Boolean {
-        if (event != null) {
-            gestureDetector.onTouchEvent(event)
+        if (::webView.isInitialized) {
+            webView.onResume()
         }
-        return super.dispatchTouchEvent(event)
     }
 
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            hideSystemUI()
+    override fun onPause() {
+        super.onPause()
+        if (::webView.isInitialized) {
+            webView.onPause()
         }
     }
 
     override fun onDestroy() {
-        stopAutoRefresh()
-        navHandler.removeCallbacksAndMessages(null)
-        NetworkRetryHelper.stopWaiting()
-        NetworkRetryHelper.stopHostRetry()
         super.onDestroy()
+        if (::webView.isInitialized) {
+            webView.destroy()
+        }
     }
 
-    @SuppressLint("SetTextI18n")
-    private fun loadWaitingPage(targetUrl: String, failedOverNetwork: Boolean = false) {
-        webView.setBackgroundColor(android.graphics.Color.parseColor("#1a1a2e"))
+    class BlobDownloaderInterface(private val context: Context) {
+        @JavascriptInterface
+        fun downloadBase64(base64Data: String, mimeType: String, filename: String) {
+            try {
+                val bytes = Base64.decode(base64Data, Base64.DEFAULT)
 
-        // Issue #2 FIX: loadUrl with real asset instead of loadDataWithBaseURL
-        val encodedUrl = android.net.Uri.encode(targetUrl)
-        webView.loadUrl("file:///android_asset/waiting.html?url=$encodedUrl")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val values = ContentValues().apply {
+                        put(MediaStore.Downloads.DISPLAY_NAME, filename)
+                        put(MediaStore.Downloads.MIME_TYPE, mimeType)
+                        put(MediaStore.Downloads.IS_PENDING, 1)
+                    }
+                    val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    uri?.let {
+                        context.contentResolver.openOutputStream(it)?.use { os -> os.write(bytes) }
+                        values.clear()
+                        values.put(MediaStore.Downloads.IS_PENDING, 0)
+                        context.contentResolver.update(it, values, null, null)
+                    }
+                } else {
+                    val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                    val file = File(downloadsDir, filename)
+                    FileOutputStream(file).use { it.write(bytes) }
+                    android.media.MediaScannerConnection.scanFile(
+                        context,
+                        arrayOf(file.absolutePath),
+                        arrayOf(mimeType),
+                        null
+                    )
+                }
 
-        if (failedOverNetwork) {
-            NetworkRetryHelper.startHostRetry(this, targetUrl) { url -> webView.loadUrl(url) }
-        } else {
-            NetworkRetryHelper.startWaitingForNetwork(this, targetUrl) { url -> webView.loadUrl(url) }
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    Toast.makeText(context, "Saved: $filename", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("BlobDownload", "Failed to save blob", e)
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    Toast.makeText(context, "Download failed", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 }
