@@ -21,4 +21,9 @@
         <item>300</item>
         <item>900</item>
     </integer-array>
+
+    <string-array name="theme_options">
+        <item>Dark</item>
+        <item>Light</item>
+    </string-array>
 </resources>

@@ -1,6 +1,5 @@
 package com.shinydiscoballsdev.kifossk
 
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.widget.ArrayAdapter
@@ -17,16 +16,19 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var editTextUrl: EditText
     private lateinit var switchScreenOn: SwitchCompat
     private lateinit var spinnerOrientation: Spinner
+    private lateinit var spinnerTheme: Spinner
     private lateinit var btnSave: Button
     private lateinit var btnReload: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        applyTheme()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
 
         editTextUrl = findViewById(R.id.editTextUrl)
         switchScreenOn = findViewById(R.id.switchScreenOn)
         spinnerOrientation = findViewById(R.id.spinnerOrientation)
+        spinnerTheme = findViewById(R.id.spinnerTheme)
         btnSave = findViewById(R.id.buttonSave)
         btnReload = findViewById(R.id.buttonReload)
 
@@ -45,6 +47,18 @@ class SettingsActivity : AppCompatActivity() {
             spinnerOrientation.setSelection(orientationMap[savedOrientation] ?: 2)
         }
 
+        ArrayAdapter.createFromResource(
+            this,
+            R.array.theme_options,
+            android.R.layout.simple_spinner_item
+        ).also { adapter ->
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            spinnerTheme.adapter = adapter
+            val savedTheme = KioskPrefs.getTheme(this)
+            val themeMap = mapOf("dark" to 0, "light" to 1)
+            spinnerTheme.setSelection(themeMap[savedTheme] ?: 0)
+        }
+
         btnSave.setOnClickListener {
             saveSettings()
             Toast.makeText(this, "Settings saved!", Toast.LENGTH_SHORT).show()
@@ -59,13 +73,17 @@ class SettingsActivity : AppCompatActivity() {
             finish()
         }
 
-        // Back press on Settings → move app to background, preserve state
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 saveSettings()
-                moveTaskToBack(false)
+                finish()
             }
         })
+    }
+
+    private fun applyTheme() {
+        val theme = KioskPrefs.getTheme(this)
+        setTheme(if (theme == "light") R.style.Theme_KioskViewer_Light else R.style.Theme_KioskViewer)
     }
 
     private fun saveSettings() {
@@ -73,6 +91,8 @@ class SettingsActivity : AppCompatActivity() {
         KioskPrefs.setScreenOn(this, switchScreenOn.isChecked)
         val orientationMap = mapOf(0 to "landscape", 1 to "portrait", 2 to "auto")
         KioskPrefs.setOrientation(this, orientationMap[spinnerOrientation.selectedItemPosition] ?: "auto")
+        val themeMap = mapOf(0 to "dark", 1 to "light")
+        KioskPrefs.setTheme(this, themeMap[spinnerTheme.selectedItemPosition] ?: "dark")
     }
 
     override fun onPause() {

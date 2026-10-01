@@ -49,4 +49,12 @@ object KioskPrefs {
     fun setScreenOn(context: Context, value: Boolean) {
         getInstance(context).edit().putBoolean("screen_on", value).apply()
     }
+
+    fun getTheme(context: Context): String {
+        return getInstance(context).getString("app_theme", "dark") ?: "dark"
+    }
+
+    fun setTheme(context: Context, theme: String) {
+        getInstance(context).edit().putString("app_theme", theme).apply()
+    }
 }
