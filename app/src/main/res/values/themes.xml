@@ -1,7 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.KioskViewer" parent="Theme.AppCompat.Light.NoActionBar">
+    <style name="Theme.KioskViewer" parent="Theme.AppCompat.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="colorPrimary">#6d4aff</item>
+        <item name="colorAccent">#6d4aff</item>
+    </style>
+
+    <style name="Theme.KioskViewer.Light" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="colorPrimary">#6d4aff</item>
+        <item name="colorAccent">#6d4aff</item>
     </style>
 </resources>

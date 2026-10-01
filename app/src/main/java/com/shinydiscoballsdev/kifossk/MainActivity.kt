@@ -9,6 +9,11 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
+import android.content.ContentValues
+import android.util.Base64
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
 import android.webkit.JavascriptInterface
@@ -25,9 +30,6 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import android.provider.MediaStore
-import android.content.ContentValues
-import android.util.Base64
 import java.io.File
 import java.io.FileOutputStream
 
@@ -36,43 +38,28 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
-    private var fileChooserResultCode = 1
+    private val fileChooserResultCode = 1
 
     companion object {
         private const val PREFS_NAME = "sillytavern_prefs"
-        private const val KEY_LAST_WAS_SETTINGS = "last_was_settings"
-        private const val DEFAULT_URL = "http://localhost:8000"
         const val EXTRA_RELOAD = "extra_reload"
     }
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
-        results.forEach { (perm, granted) ->
-            if (granted) {
-                android.util.Log.d("Permissions", "$perm granted")
-            }
+        results.forEach { (_, granted) ->
+            if (granted) android.util.Log.d("Permissions", "granted")
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val lastWasSettings = prefs.getBoolean(KEY_LAST_WAS_SETTINGS, false)
-
-        if (lastWasSettings) {
-            prefs.edit().putBoolean(KEY_LAST_WAS_SETTINGS, false).apply()
-            startActivity(Intent(this, SettingsActivity::class.java))
-            return
-        }
-
-        prefs.edit().putBoolean(KEY_LAST_WAS_SETTINGS, false).apply()
-        requestNotificationPermission()
+        requestPermissions()
         setupWebView()
     }
 
-    private fun requestNotificationPermission() {
+    private fun requestPermissions() {
         val perms = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) !=
@@ -136,29 +123,56 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
+
+                // Intercept blob: navigations (window.open, location=, etc)
                 if (url.startsWith("blob:")) {
+                    val safeUrl = url.replace("\"", "\\\"")
                     view?.evaluateJavascript(
                         """
                         (function() {
-                            fetch("$url")
-                                .then(r => r.blob())
-                                .then(blob => {
-                                    return new Promise((resolve) => {
-                                        const reader = new FileReader();
+                            var blob = window.__blobRegistry && window.__blobRegistry["$safeUrl"];
+                            if (blob) {
+                                var reader = new FileReader();
+                                reader.onloadend = function() {
+                                    var base64 = reader.result.split(',')[1];
+                                    var mime = blob.type || 'application/octet-stream';
+                                    var filename = 'download';
+                                    BlobDownloader.downloadBase64(base64, mime, filename);
+                                };
+                                reader.readAsDataURL(blob);
+                            } else {
+                                fetch("$safeUrl")
+                                    .then(r => r.blob())
+                                    .then(blob => {
+                                        var reader = new FileReader();
                                         reader.onloadend = function() {
-                                            const base64 = reader.result.split(',')[1];
-                                            const mime = blob.type || 'application/octet-stream';
+                                            var base64 = reader.result.split(',')[1];
+                                            var mime = blob.type || 'application/octet-stream';
                                             BlobDownloader.downloadBase64(base64, mime, 'download');
-                                            resolve();
                                         };
                                         reader.readAsDataURL(blob);
-                                    });
-                                });
+                                    })
+                                    .catch(e => console.log('Blob fetch failed', e));
+                            }
                         })();
                         """.trimIndent(), null
                     )
                     return true
                 }
+
+                // Intercept data: URLs
+                if (url.startsWith("data:")) {
+                    val commaIndex = url.indexOf(",")
+                    if (commaIndex > 0) {
+                        val header = url.substring(0, commaIndex)
+                        val base64Data = url.substring(commaIndex + 1)
+                        val mime = header.substringAfter("data:").substringBefore(";")
+                        val filename = "download" + mimeToExtension(mime)
+                        BlobDownloaderInterface(this@MainActivity).downloadBase64(base64Data, mime, filename)
+                    }
+                    return true
+                }
+
                 return false
             }
 
@@ -193,9 +207,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimeType, contentLength ->
-            if (url.startsWith("blob:")) {
-                return@DownloadListener
-            }
+            if (url.startsWith("blob:")) return@DownloadListener
+
             val request = DownloadManager.Request(Uri.parse(url))
             request.setMimeType(mimeType)
             val cookies = CookieManager.getInstance().getCookie(url)
@@ -219,8 +232,6 @@ class MainActivity : AppCompatActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                    .edit().putBoolean(KEY_LAST_WAS_SETTINGS, true).apply()
                 startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
             }
         })
@@ -233,43 +244,69 @@ class MainActivity : AppCompatActivity() {
             (function() {
                 if (window.__blobInterceptorInstalled) return;
                 window.__blobInterceptorInstalled = true;
+                window.__blobRegistry = window.__blobRegistry || {};
 
-                const originalCreateObjectURL = URL.createObjectURL;
+                var origCreateObjectURL = URL.createObjectURL;
                 URL.createObjectURL = function(blob) {
-                    const url = originalCreateObjectURL.call(this, blob);
-                    blob.__blobUrl = url;
+                    var url = origCreateObjectURL.call(this, blob);
+                    window.__blobRegistry[url] = blob;
                     return url;
                 };
 
-                const originalRevokeObjectURL = URL.revokeObjectURL;
+                var origRevokeObjectURL = URL.revokeObjectURL;
                 URL.revokeObjectURL = function(url) {
-                    originalRevokeObjectURL.call(this, url);
+                    delete window.__blobRegistry[url];
+                    origRevokeObjectURL.call(this, url);
                 };
 
-                document.addEventListener('click', function(e) {
-                    const el = e.target.closest('a[download]');
-                    if (!el) return;
-                    const href = el.getAttribute('href');
-                    if (href && href.startsWith('blob:')) {
-                        e.preventDefault();
-                        e.stopPropagation();
+                // Intercept programmatic clicks on <a download> with blob hrefs
+                function interceptDownload(el) {
+                    var href = el.getAttribute('href');
+                    if (!href || !href.startsWith('blob:')) return false;
+                    var blob = window.__blobRegistry[href];
+                    var filename = el.getAttribute('download') || 'download';
+                    if (blob) {
+                        var reader = new FileReader();
+                        reader.onloadend = function() {
+                            var base64 = reader.result.split(',')[1];
+                            var mime = blob.type || 'application/octet-stream';
+                            BlobDownloader.downloadBase64(base64, mime, filename);
+                        };
+                        reader.readAsDataURL(blob);
+                    } else {
                         fetch(href)
                             .then(r => r.blob())
                             .then(blob => {
-                                return new Promise((resolve) => {
-                                    const reader = new FileReader();
-                                    reader.onloadend = function() {
-                                        const base64 = reader.result.split(',')[1];
-                                        const mime = blob.type || 'application/octet-stream';
-                                        const filename = el.getAttribute('download') || 'download';
-                                        BlobDownloader.downloadBase64(base64, mime, filename);
-                                        resolve();
-                                    };
-                                    reader.readAsDataURL(blob);
-                                });
-                            });
+                                var reader = new FileReader();
+                                reader.onloadend = function() {
+                                    var base64 = reader.result.split(',')[1];
+                                    var mime = blob.type || 'application/octet-stream';
+                                    BlobDownloader.downloadBase64(base64, mime, filename);
+                                };
+                                reader.readAsDataURL(blob);
+                            })
+                            .catch(e => console.log('Blob fetch failed', e));
+                    }
+                    return true;
+                }
+
+                document.addEventListener('click', function(e) {
+                    var el = e.target.closest('a[download]');
+                    if (!el) return;
+                    if (interceptDownload(el)) {
+                        e.preventDefault();
+                        e.stopPropagation();
                     }
                 }, true);
+
+                // Also hook into anchor.click() calls
+                var origClick = HTMLAnchorElement.prototype.click;
+                HTMLAnchorElement.prototype.click = function() {
+                    if (this.hasAttribute('download') && interceptDownload(this)) {
+                        return;
+                    }
+                    return origClick.call(this);
+                };
             })();
         """.trimIndent()
         webView.evaluateJavascript(js, null)
@@ -291,29 +328,37 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         if (::webView.isInitialized && intent?.getBooleanExtra(EXTRA_RELOAD, false) == true) {
-            val url = KioskPrefs.getUrl(this)
-            webView.loadUrl(url)
+            webView.loadUrl(KioskPrefs.getUrl(this))
         }
     }
 
     override fun onResume() {
         super.onResume()
-        if (::webView.isInitialized) {
-            webView.onResume()
-        }
+        if (::webView.isInitialized) webView.onResume()
     }
 
     override fun onPause() {
         super.onPause()
-        if (::webView.isInitialized) {
-            webView.onPause()
-        }
+        if (::webView.isInitialized) webView.onPause()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        if (::webView.isInitialized) {
-            webView.destroy()
+        if (::webView.isInitialized) webView.destroy()
+    }
+
+    private fun mimeToExtension(mime: String): String {
+        return when (mime.lowercase()) {
+            "text/json", "application/json" -> ".json"
+            "text/plain" -> ".txt"
+            "text/html" -> ".html"
+            "image/png" -> ".png"
+            "image/jpeg", "image/jpg" -> ".jpg"
+            "image/webp" -> ".webp"
+            "image/gif" -> ".gif"
+            "application/pdf" -> ".pdf"
+            "application/zip" -> ".zip"
+            else -> ""
         }
     }
 
@@ -348,12 +393,12 @@ class MainActivity : AppCompatActivity() {
                     )
                 }
 
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                Handler(Looper.getMainLooper()).post {
                     Toast.makeText(context, "Saved: $filename", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 android.util.Log.e("BlobDownload", "Failed to save blob", e)
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                Handler(Looper.getMainLooper()).post {
                     Toast.makeText(context, "Download failed", Toast.LENGTH_SHORT).show()
                 }
             }
