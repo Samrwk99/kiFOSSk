@@ -177,7 +177,7 @@ class MainActivity : AppCompatActivity() {
                 this@MainActivity.filePathCallback?.onReceiveValue(null)
                 this@MainActivity.filePathCallback = filePathCallback
 
-                val intent = fileChooserParams?.createIntent()
+                val intent = fileChooserParams?.createIntent() ?: return false
                 try {
                     startActivityForResult(intent, fileChooserResultCode)
                 } catch (e: Exception) {
