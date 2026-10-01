@@ -17,16 +17,15 @@ android {
     defaultConfig {
         applicationId = "com.shinydiscoballsdev.kifossk"
         minSdk = 24
-        //noinspection EditedTargetSdkVersion
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.1.2"
+        versionCode = 1
+        versionName = "1.0.0"
     }
 
     applicationVariants.all {
         outputs.all {
             val variantName = if (buildType.name == "release") "release" else "debug"
-            val fileName = "kiFOSSk-${versionName}-${variantName}.apk"
+            val fileName = "SillyTavern-${versionName}-${variantName}.apk"
             (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName = fileName
         }
     }
