@@ -60,6 +60,10 @@ class MainActivity : AppCompatActivity() {
         applyTheme()
         super.onCreate(savedInstanceState)
         requestPermissions()
+        requestBatteryExemption()
+        if (KioskPrefs.getKeepAlive(this)) {
+            KeepAliveService.start(this)
+        }
 
         container = FrameLayout(this)
         setContentView(container)
@@ -80,6 +84,20 @@ class MainActivity : AppCompatActivity() {
     private fun applyTheme() {
         val theme = KioskPrefs.getTheme(this)
         setTheme(if (theme == "light") R.style.Theme_KioskViewer_Light else R.style.Theme_KioskViewer)
+    }
+
+    private fun requestBatteryExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+                try {
+                    startActivity(intent)
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     private fun requestPermissions() {
@@ -391,6 +409,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        KeepAliveService.stop(this)
         if (::webView.isInitialized) webView.destroy()
     }
 

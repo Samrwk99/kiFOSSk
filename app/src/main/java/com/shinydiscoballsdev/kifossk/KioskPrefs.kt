@@ -57,4 +57,20 @@ object KioskPrefs {
     fun setTheme(context: Context, theme: String) {
         getInstance(context).edit().putString("app_theme", theme).apply()
     }
+
+    fun getKeepAlive(context: Context): Boolean {
+        return getInstance(context).getBoolean("keep_alive", true)
+    }
+
+    fun setKeepAlive(context: Context, value: Boolean) {
+        getInstance(context).edit().putBoolean("keep_alive", value).apply()
+    }
+
+    fun getShowNotification(context: Context): Boolean {
+        return getInstance(context).getBoolean("show_notification", true)
+    }
+
+    fun setShowNotification(context: Context, value: Boolean) {
+        getInstance(context).edit().putBoolean("show_notification", value).apply()
+    }
 }
