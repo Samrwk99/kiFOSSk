@@ -2,6 +2,8 @@ package com.shinydiscoballsdev.kifossk
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -19,6 +21,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var spinnerTheme: Spinner
     private lateinit var btnSave: Button
     private lateinit var btnReload: Button
+    private lateinit var gestureDetector: GestureDetector
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applyTheme()
@@ -59,6 +62,19 @@ class SettingsActivity : AppCompatActivity() {
             spinnerTheme.setSelection(themeMap[savedTheme] ?: 0)
         }
 
+        spinnerTheme.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                val themeMap = mapOf(0 to "dark", 1 to "light")
+                val selectedTheme = themeMap[position] ?: "dark"
+                val currentTheme = KioskPrefs.getTheme(this@SettingsActivity)
+                if (selectedTheme != currentTheme) {
+                    KioskPrefs.setTheme(this@SettingsActivity, selectedTheme)
+                    recreate()
+                }
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
+
         btnSave.setOnClickListener {
             saveSettings()
             Toast.makeText(this, "Settings saved!", Toast.LENGTH_SHORT).show()
@@ -79,6 +95,37 @@ class SettingsActivity : AppCompatActivity() {
                 finish()
             }
         })
+
+        gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            private val SWIPE_THRESHOLD = 100
+            private val SWIPE_VELOCITY_THRESHOLD = 100
+
+            override fun onFling(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                if (e1 == null) return false
+                val diffX = e1.x - e2.x
+                val diffY = e1.y - e2.y
+                if (kotlin.math.abs(diffX) > kotlin.math.abs(diffY) &&
+                    kotlin.math.abs(diffX) > SWIPE_THRESHOLD &&
+                    kotlin.math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD &&
+                    diffX > 0
+                ) {
+                    saveSettings()
+                    finish()
+                    return true
+                }
+                return false
+            }
+        })
+    }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        gestureDetector.onTouchEvent(event)
+        return super.dispatchTouchEvent(event)
     }
 
     private fun applyTheme() {
