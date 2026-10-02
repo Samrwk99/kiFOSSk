@@ -1,20 +1,20 @@
 package com.shinydiscoballsdev.kifossk
 
-import android.content.Intent
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Spinner
 import android.widget.Toast
-import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
+import androidx.fragment.app.Fragment
 
-class SettingsActivity : AppCompatActivity() {
+class SettingsFragment : Fragment() {
 
     private lateinit var editTextUrl: EditText
     private lateinit var switchScreenOn: SwitchCompat
@@ -27,43 +27,52 @@ class SettingsActivity : AppCompatActivity() {
     private var startY = 0f
     private var isDragging = false
     private val swipeThreshold by lazy { resources.displayMetrics.widthPixels * 0.25f }
-    private val contentView by lazy { window.decorView.findViewById<View>(android.R.id.content) }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        applyTheme()
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_settings)
+    var onDismiss: (() -> Unit)? = null
+    var onReload: (() -> Unit)? = null
 
-        editTextUrl = findViewById(R.id.editTextUrl)
-        switchScreenOn = findViewById(R.id.switchScreenOn)
-        spinnerOrientation = findViewById(R.id.spinnerOrientation)
-        spinnerTheme = findViewById(R.id.spinnerTheme)
-        btnSave = findViewById(R.id.buttonSave)
-        btnReload = findViewById(R.id.buttonReload)
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        return inflater.inflate(R.layout.fragment_settings, container, false)
+    }
 
-        editTextUrl.setText(KioskPrefs.getUrl(this))
-        switchScreenOn.isChecked = KioskPrefs.getScreenOn(this)
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        editTextUrl = view.findViewById(R.id.editTextUrl)
+        switchScreenOn = view.findViewById(R.id.switchScreenOn)
+        spinnerOrientation = view.findViewById(R.id.spinnerOrientation)
+        spinnerTheme = view.findViewById(R.id.spinnerTheme)
+        btnSave = view.findViewById(R.id.buttonSave)
+        btnReload = view.findViewById(R.id.buttonReload)
+
+        val ctx = requireContext()
+        editTextUrl.setText(KioskPrefs.getUrl(ctx))
+        switchScreenOn.isChecked = KioskPrefs.getScreenOn(ctx)
 
         ArrayAdapter.createFromResource(
-            this,
+            ctx,
             R.array.orientation_options,
             android.R.layout.simple_spinner_item
         ).also { adapter ->
             adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             spinnerOrientation.adapter = adapter
-            val savedOrientation = KioskPrefs.getOrientation(this)
+            val savedOrientation = KioskPrefs.getOrientation(ctx)
             val orientationMap = mapOf("landscape" to 0, "portrait" to 1, "auto" to 2)
             spinnerOrientation.setSelection(orientationMap[savedOrientation] ?: 2)
         }
 
         ArrayAdapter.createFromResource(
-            this,
+            ctx,
             R.array.theme_options,
             android.R.layout.simple_spinner_item
         ).also { adapter ->
             adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             spinnerTheme.adapter = adapter
-            val savedTheme = KioskPrefs.getTheme(this)
+            val savedTheme = KioskPrefs.getTheme(ctx)
             val themeMap = mapOf("dark" to 0, "light" to 1)
             spinnerTheme.setSelection(themeMap[savedTheme] ?: 0)
         }
@@ -72,10 +81,10 @@ class SettingsActivity : AppCompatActivity() {
             override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
                 val themeMap = mapOf(0 to "dark", 1 to "light")
                 val selectedTheme = themeMap[position] ?: "dark"
-                val currentTheme = KioskPrefs.getTheme(this@SettingsActivity)
+                val currentTheme = KioskPrefs.getTheme(ctx)
                 if (selectedTheme != currentTheme) {
-                    KioskPrefs.setTheme(this@SettingsActivity, selectedTheme)
-                    recreate()
+                    KioskPrefs.setTheme(ctx, selectedTheme)
+                    activity?.recreate()
                 }
             }
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
@@ -83,33 +92,33 @@ class SettingsActivity : AppCompatActivity() {
 
         btnSave.setOnClickListener {
             saveSettings()
-            Toast.makeText(this, "Settings saved!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, "Settings saved!", Toast.LENGTH_SHORT).show()
         }
 
         btnReload.setOnClickListener {
             saveSettings()
-            val intent = Intent(this, MainActivity::class.java)
-            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
-            intent.putExtra(MainActivity.EXTRA_RELOAD, true)
-            startActivity(intent)
-            finish()
+            onReload?.invoke()
+            dismiss()
         }
 
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                saveSettings()
-                finish()
-            }
-        })
+        view.setBackgroundColor(
+            if (KioskPrefs.getTheme(ctx) == "light") 0xFFF5F5F5.toInt() else 0xFF1A1A2E.toInt()
+        )
     }
 
-    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+    fun onBackPressed(): Boolean {
+        saveSettings()
+        dismiss()
+        return true
+    }
+
+    fun handleTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 startX = event.rawX
                 startY = event.rawY
                 isDragging = false
-                contentView.animate().cancel()
+                view?.animate()?.cancel()
             }
             MotionEvent.ACTION_MOVE -> {
                 val deltaX = event.rawX - startX
@@ -118,27 +127,27 @@ class SettingsActivity : AppCompatActivity() {
                     isDragging = true
                 }
                 if (isDragging) {
-                    contentView.translationX = deltaX
+                    view?.translationX = deltaX
                     return true
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (isDragging) {
                     val deltaX = event.rawX - startX
+                    val v = view ?: return false
                     if (kotlin.math.abs(deltaX) > swipeThreshold) {
-                        val endX = if (deltaX > 0) contentView.width.toFloat() else -contentView.width.toFloat()
-                        contentView.animate()
+                        val endX = if (deltaX > 0) v.width.toFloat() else -v.width.toFloat()
+                        v.animate()
                             .translationX(endX)
                             .setDuration(200)
                             .setInterpolator(DecelerateInterpolator())
                             .withEndAction {
                                 saveSettings()
-                                finish()
-                                overridePendingTransition(0, 0)
+                                dismiss()
                             }
                             .start()
                     } else {
-                        contentView.animate()
+                        v.animate()
                             .translationX(0f)
                             .setDuration(150)
                             .setInterpolator(DecelerateInterpolator())
@@ -149,21 +158,21 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }
-        return super.dispatchTouchEvent(event)
+        return false
     }
 
-    private fun applyTheme() {
-        val theme = KioskPrefs.getTheme(this)
-        setTheme(if (theme == "light") R.style.Theme_KioskViewer_Light else R.style.Theme_KioskViewer)
+    private fun dismiss() {
+        onDismiss?.invoke()
     }
 
     private fun saveSettings() {
-        KioskPrefs.setUrl(this, editTextUrl.text.toString())
-        KioskPrefs.setScreenOn(this, switchScreenOn.isChecked)
+        val ctx = requireContext()
+        KioskPrefs.setUrl(ctx, editTextUrl.text.toString())
+        KioskPrefs.setScreenOn(ctx, switchScreenOn.isChecked)
         val orientationMap = mapOf(0 to "landscape", 1 to "portrait", 2 to "auto")
-        KioskPrefs.setOrientation(this, orientationMap[spinnerOrientation.selectedItemPosition] ?: "auto")
+        KioskPrefs.setOrientation(ctx, orientationMap[spinnerOrientation.selectedItemPosition] ?: "auto")
         val themeMap = mapOf(0 to "dark", 1 to "light")
-        KioskPrefs.setTheme(this, themeMap[spinnerTheme.selectedItemPosition] ?: "dark")
+        KioskPrefs.setTheme(ctx, themeMap[spinnerTheme.selectedItemPosition] ?: "dark")
     }
 
     override fun onPause() {

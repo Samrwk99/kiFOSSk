@@ -15,4 +15,14 @@
         <item name="colorPrimary">#6d4aff</item>
         <item name="colorAccent">#6d4aff</item>
     </style>
+
+    <style name="Theme.KioskViewer.Translucent" parent="Theme.KioskViewer">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+
+    <style name="Theme.KioskViewer.Light.Translucent" parent="Theme.KioskViewer.Light">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
 </resources>
