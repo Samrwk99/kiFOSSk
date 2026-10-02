@@ -14,6 +14,7 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.content.ContentValues
 import android.util.Base64
+import android.view.MotionEvent
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
 import android.webkit.JavascriptInterface
@@ -25,6 +26,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,11 +39,12 @@ import java.io.FileOutputStream
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var container: FrameLayout
+    private var settingsFragment: SettingsFragment? = null
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val fileChooserResultCode = 1
 
     companion object {
-        private const val PREFS_NAME = "sillytavern_prefs"
         const val EXTRA_RELOAD = "extra_reload"
     }
 
@@ -54,9 +57,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        applyTheme()
         super.onCreate(savedInstanceState)
         requestPermissions()
+
+        container = FrameLayout(this)
+        setContentView(container)
+
         setupWebView()
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (settingsFragment != null) {
+                    closeSettings()
+                } else {
+                    showSettings()
+                }
+            }
+        })
+    }
+
+    private fun applyTheme() {
+        val theme = KioskPrefs.getTheme(this)
+        setTheme(if (theme == "light") R.style.Theme_KioskViewer_Light else R.style.Theme_KioskViewer)
     }
 
     private fun requestPermissions() {
@@ -124,7 +147,6 @@ class MainActivity : AppCompatActivity() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
 
-                // Intercept blob: navigations (window.open, location=, etc)
                 if (url.startsWith("blob:")) {
                     val safeUrl = url.replace("\"", "\\\"")
                     view?.evaluateJavascript(
@@ -136,8 +158,7 @@ class MainActivity : AppCompatActivity() {
                                 reader.onloadend = function() {
                                     var base64 = reader.result.split(',')[1];
                                     var mime = blob.type || 'application/octet-stream';
-                                    var filename = 'download';
-                                    BlobDownloader.downloadBase64(base64, mime, filename);
+                                    BlobDownloader.downloadBase64(base64, mime, 'download');
                                 };
                                 reader.readAsDataURL(blob);
                             } else {
@@ -160,7 +181,6 @@ class MainActivity : AppCompatActivity() {
                     return true
                 }
 
-                // Intercept data: URLs
                 if (url.startsWith("data:")) {
                     val commaIndex = url.indexOf(",")
                     if (commaIndex > 0) {
@@ -228,15 +248,45 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(applicationContext, "Downloading file...", Toast.LENGTH_LONG).show()
         })
 
-        setContentView(webView)
+        container.addView(webView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
 
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
-            }
-        })
+        if (intent?.getBooleanExtra(EXTRA_RELOAD, false) == true) {
+            webView.loadUrl(url)
+        } else {
+            webView.loadUrl(url)
+        }
+    }
 
-        webView.loadUrl(url)
+    private fun showSettings() {
+        if (settingsFragment != null) return
+        val fragment = SettingsFragment()
+        fragment.onDismiss = { closeSettings() }
+        fragment.onReload = {
+            webView.loadUrl(KioskPrefs.getUrl(this))
+        }
+        settingsFragment = fragment
+        supportFragmentManager.beginTransaction()
+            .add(android.R.id.content, fragment)
+            .commit()
+    }
+
+    private fun closeSettings() {
+        settingsFragment?.let {
+            supportFragmentManager.beginTransaction()
+                .remove(it)
+                .commit()
+            settingsFragment = null
+        }
+    }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        settingsFragment?.let {
+            if (it.handleTouchEvent(event)) return true
+        }
+        return super.dispatchTouchEvent(event)
     }
 
     private fun injectBlobInterceptor() {
@@ -259,7 +309,6 @@ class MainActivity : AppCompatActivity() {
                     origRevokeObjectURL.call(this, url);
                 };
 
-                // Intercept programmatic clicks on <a download> with blob hrefs
                 function interceptDownload(el) {
                     var href = el.getAttribute('href');
                     if (!href || !href.startsWith('blob:')) return false;
@@ -299,7 +348,6 @@ class MainActivity : AppCompatActivity() {
                     }
                 }, true);
 
-                // Also hook into anchor.click() calls
                 var origClick = HTMLAnchorElement.prototype.click;
                 HTMLAnchorElement.prototype.click = function() {
                     if (this.hasAttribute('download') && interceptDownload(this)) {
@@ -339,7 +387,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        if (::webView.isInitialized) webView.onPause()
     }
 
     override fun onDestroy() {
