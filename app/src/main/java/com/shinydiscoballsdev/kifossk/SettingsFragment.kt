@@ -70,10 +70,9 @@ class SettingsFragment : Fragment() {
 
         switchShowNotification.setOnCheckedChangeListener { _, isChecked ->
             KioskPrefs.setShowNotification(ctx, isChecked)
-            if (isChecked && KioskPrefs.getKeepAlive(ctx)) {
-                KeepAliveService.start(ctx)
-            } else {
+            if (KioskPrefs.getKeepAlive(ctx)) {
                 KeepAliveService.stop(ctx)
+                KeepAliveService.start(ctx)
             }
         }
 
