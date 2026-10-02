@@ -18,6 +18,8 @@ class SettingsFragment : Fragment() {
 
     private lateinit var editTextUrl: EditText
     private lateinit var switchScreenOn: SwitchCompat
+    private lateinit var switchKeepAlive: SwitchCompat
+    private lateinit var switchShowNotification: SwitchCompat
     private lateinit var spinnerOrientation: Spinner
     private lateinit var spinnerTheme: Spinner
     private lateinit var btnSave: Button
@@ -44,6 +46,8 @@ class SettingsFragment : Fragment() {
 
         editTextUrl = view.findViewById(R.id.editTextUrl)
         switchScreenOn = view.findViewById(R.id.switchScreenOn)
+        switchKeepAlive = view.findViewById(R.id.switchKeepAlive)
+        switchShowNotification = view.findViewById(R.id.switchShowNotification)
         spinnerOrientation = view.findViewById(R.id.spinnerOrientation)
         spinnerTheme = view.findViewById(R.id.spinnerTheme)
         btnSave = view.findViewById(R.id.buttonSave)
@@ -52,6 +56,26 @@ class SettingsFragment : Fragment() {
         val ctx = requireContext()
         editTextUrl.setText(KioskPrefs.getUrl(ctx))
         switchScreenOn.isChecked = KioskPrefs.getScreenOn(ctx)
+        switchKeepAlive.isChecked = KioskPrefs.getKeepAlive(ctx)
+        switchShowNotification.isChecked = KioskPrefs.getShowNotification(ctx)
+
+        switchKeepAlive.setOnCheckedChangeListener { _, isChecked ->
+            KioskPrefs.setKeepAlive(ctx, isChecked)
+            if (isChecked) {
+                KeepAliveService.start(ctx)
+            } else {
+                KeepAliveService.stop(ctx)
+            }
+        }
+
+        switchShowNotification.setOnCheckedChangeListener { _, isChecked ->
+            KioskPrefs.setShowNotification(ctx, isChecked)
+            if (isChecked && KioskPrefs.getKeepAlive(ctx)) {
+                KeepAliveService.start(ctx)
+            } else {
+                KeepAliveService.stop(ctx)
+            }
+        }
 
         ArrayAdapter.createFromResource(
             ctx,
@@ -169,6 +193,8 @@ class SettingsFragment : Fragment() {
         val ctx = requireContext()
         KioskPrefs.setUrl(ctx, editTextUrl.text.toString())
         KioskPrefs.setScreenOn(ctx, switchScreenOn.isChecked)
+        KioskPrefs.setKeepAlive(ctx, switchKeepAlive.isChecked)
+        KioskPrefs.setShowNotification(ctx, switchShowNotification.isChecked)
         val orientationMap = mapOf(0 to "landscape", 1 to "portrait", 2 to "auto")
         KioskPrefs.setOrientation(ctx, orientationMap[spinnerOrientation.selectedItemPosition] ?: "auto")
         val themeMap = mapOf(0 to "dark", 1 to "light")
