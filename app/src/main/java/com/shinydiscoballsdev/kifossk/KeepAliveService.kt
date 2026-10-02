@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -52,7 +53,8 @@ class KeepAliveService : Service() {
         if (showNotification) {
             builder.setContentText("Keeping connection alive")
         }
-        builder.setSmallIcon(R.mipmap.ic_launcher_foreground)
+        builder.setSmallIcon(android.R.drawable.ic_menu_info_details)
+        builder.setLargeIcon(BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher_foreground))
 
         startForeground(NOTIFICATION_ID, builder.build())
         return START_STICKY
