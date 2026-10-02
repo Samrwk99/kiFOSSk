@@ -2,8 +2,9 @@ package com.shinydiscoballsdev.kifossk
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.View
+import android.view.animation.DecelerateInterpolator
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -21,7 +22,12 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var spinnerTheme: Spinner
     private lateinit var btnSave: Button
     private lateinit var btnReload: Button
-    private lateinit var gestureDetector: GestureDetector
+
+    private var startX = 0f
+    private var startY = 0f
+    private var isDragging = false
+    private val swipeThreshold by lazy { resources.displayMetrics.widthPixels * 0.25f }
+    private val contentView by lazy { window.decorView.findViewById<View>(android.R.id.content) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applyTheme()
@@ -95,36 +101,54 @@ class SettingsActivity : AppCompatActivity() {
                 finish()
             }
         })
-
-        gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            private val SWIPE_THRESHOLD = 100
-            private val SWIPE_VELOCITY_THRESHOLD = 100
-
-            override fun onFling(
-                e1: MotionEvent?,
-                e2: MotionEvent,
-                velocityX: Float,
-                velocityY: Float
-            ): Boolean {
-                if (e1 == null) return false
-                val diffX = e1.x - e2.x
-                val diffY = e1.y - e2.y
-                if (kotlin.math.abs(diffX) > kotlin.math.abs(diffY) &&
-                    kotlin.math.abs(diffX) > SWIPE_THRESHOLD &&
-                    kotlin.math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD &&
-                    diffX > 0
-                ) {
-                    saveSettings()
-                    finish()
-                    return true
-                }
-                return false
-            }
-        })
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        gestureDetector.onTouchEvent(event)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                startX = event.rawX
+                startY = event.rawY
+                isDragging = false
+                contentView.animate().cancel()
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val deltaX = event.rawX - startX
+                val deltaY = event.rawY - startY
+                if (!isDragging && kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY) && kotlin.math.abs(deltaX) > 20) {
+                    isDragging = true
+                }
+                if (isDragging) {
+                    contentView.translationX = deltaX
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (isDragging) {
+                    val deltaX = event.rawX - startX
+                    if (kotlin.math.abs(deltaX) > swipeThreshold) {
+                        val endX = if (deltaX > 0) contentView.width.toFloat() else -contentView.width.toFloat()
+                        contentView.animate()
+                            .translationX(endX)
+                            .setDuration(200)
+                            .setInterpolator(DecelerateInterpolator())
+                            .withEndAction {
+                                saveSettings()
+                                finish()
+                                overridePendingTransition(0, 0)
+                            }
+                            .start()
+                    } else {
+                        contentView.animate()
+                            .translationX(0f)
+                            .setDuration(150)
+                            .setInterpolator(DecelerateInterpolator())
+                            .start()
+                    }
+                    isDragging = false
+                    return true
+                }
+            }
+        }
         return super.dispatchTouchEvent(event)
     }
 
