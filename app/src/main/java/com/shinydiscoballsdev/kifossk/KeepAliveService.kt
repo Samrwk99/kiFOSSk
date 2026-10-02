@@ -51,11 +51,8 @@ class KeepAliveService : Service() {
 
         if (showNotification) {
             builder.setContentText("Keeping connection alive")
-                .setSmallIcon(android.R.drawable.ic_menu_info_details)
-        } else {
-            builder.setContentText("")
-                .setSmallIcon(android.R.drawable.ic_menu_info_details)
         }
+        builder.setSmallIcon(R.mipmap.ic_launcher_foreground)
 
         startForeground(NOTIFICATION_ID, builder.build())
         return START_STICKY
