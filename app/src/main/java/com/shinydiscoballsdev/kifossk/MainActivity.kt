@@ -44,26 +44,12 @@ class MainActivity : AppCompatActivity() {
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val fileChooserResultCode = 1
 
-    companion object {
-        const val EXTRA_RELOAD = "extra_reload"
-    }
-
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        results.forEach { (_, granted) ->
-            if (granted) android.util.Log.d("Permissions", "granted")
-        }
-    }
+    private var hasStartedService = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applyTheme()
         super.onCreate(savedInstanceState)
         requestPermissions()
-        requestBatteryExemption()
-        if (KioskPrefs.getKeepAlive(this)) {
-            KeepAliveService.start(this)
-        }
 
         container = FrameLayout(this)
         setContentView(container)
@@ -79,6 +65,23 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::webView.isInitialized) webView.onResume()
+
+        if (!hasStartedService) {
+            hasStartedService = true
+            if (KioskPrefs.getKeepAlive(this)) {
+                try {
+                    KeepAliveService.start(this)
+                } catch (e: Exception) {
+                    android.util.Log.e("MainActivity", "Failed to start keep-alive service", e)
+                }
+            }
+            requestBatteryExemption()
+        }
     }
 
     private fun applyTheme() {
