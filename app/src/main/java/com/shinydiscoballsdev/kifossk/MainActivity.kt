@@ -43,8 +43,21 @@ class MainActivity : AppCompatActivity() {
     private var settingsFragment: SettingsFragment? = null
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val fileChooserResultCode = 1
-
     private var hasStartedService = false
+
+    companion object {
+        const val EXTRA_RELOAD = "extra_reload"
+    }
+
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        results.forEach { (_, granted) ->
+            if (granted) android.util.Log.d("Permissions", "granted")
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applyTheme()
@@ -399,11 +412,6 @@ class MainActivity : AppCompatActivity() {
         if (::webView.isInitialized && intent?.getBooleanExtra(EXTRA_RELOAD, false) == true) {
             webView.loadUrl(KioskPrefs.getUrl(this))
         }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (::webView.isInitialized) webView.onResume()
     }
 
     override fun onPause() {
