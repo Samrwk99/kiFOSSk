@@ -1,34 +1,23 @@
-# Secrets
+# Secrets and machine-local configuration
 *.keystore
 *.jks
 local.properties
-DEVELOPMENT.md
+*.test.local.properties
 
-# Build artifacts
+# Build artifacts and caches
 build/
 .gradle/
+.kotlin/
+*.apk
+app/release/
 
 # IDE
 .idea/
-*.apk
-app/release/
-.kotlin/
 
 # OS files
 .DS_Store
 Thumbs.db
 
-# Testing
-app/src/test/
-app/src/androidTest/
-*.test.local.properties
-avd-tests/
-*.diff
-
-# Experimental / dead code
-**/DeviceAdminReceiver.kt
-
-# Gradle wrapper
-gradle/wrapper/gradle-wrapper.jar
-gradlew
-gradlew.bat
+# Optional: uncomment if these are local-generated files
+# avd-tests/
+# *.diff
