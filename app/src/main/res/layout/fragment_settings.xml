@@ -145,6 +145,12 @@
             android:checked="true"
             android:text="Show background notification"/>
 
+        <!-- Battery controls added by kiTavern-Viewer background fixes. -->
+        <include
+            layout="@layout/fragment_settings_battery_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
