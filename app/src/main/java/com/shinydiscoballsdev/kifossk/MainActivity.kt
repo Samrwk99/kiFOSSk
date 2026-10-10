@@ -232,6 +232,23 @@ class MainActivity : AppCompatActivity() {
                 super.onPageFinished(view, url)
                 injectBlobInterceptor()
             }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: android.webkit.WebResourceError?
+            ) {
+                // Handle only main-frame errors
+                if (request?.isForMainFrame != true) return
+
+                    val failedUrl = request.url.toString()
+                    val encodedUrl = java.net.URLEncoder.encode(
+                        failedUrl,
+                        Charsets.UTF_8.name()
+                    )
+
+                    view?.loadUrl("file:///android_asset/nopage.html?url=$encodedUrl")
+            }
         }
 
         webView.webChromeClient = object : WebChromeClient() {
